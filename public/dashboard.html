@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Painel - Boi Brabo</title>
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem("app-theme");
+          const resolved = theme === "dark" ? "dark" : "light";
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.style.colorScheme = resolved;
+        } catch {}
+      })();
+    </script>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <!-- Mobile backdrop -->
+    <div id="saasBackdrop" class="saas-backdrop" hidden></div>
+
+    <!-- Sidebar -->
+    <aside id="saasSidebar" class="saas-sidebar">
+      <div class="saas-sidebar-inner">
+        <div class="saas-sidebar-logo">
+          <div class="saas-logo-icon" aria-hidden="true">
+            <img
+              src="./assets/boi_brabo.png"
+              alt="Logo Boi Brabo"
+              class="saas-logo-img"
+            />
+          </div>
+          <div class="saas-logo-copy">
+            <span class="saas-logo-title">Boi Brabo</span>
+            <span class="saas-logo-subtitle">Controle de Equipamentos</span>
+          </div>
+          <button id="saasSidebarClose" class="saas-icon-btn saas-only-mobile" type="button" aria-label="Fechar menu">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18"></path>
+              <path d="M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <nav class="saas-nav">
+          <div class="saas-nav-section-title">Navegação</div>
+          <button class="saas-nav-item is-active" data-page="dashboard" type="button">
+            <span class="saas-nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              </svg>
+            </span>
+            Dashboard
+            <span class="saas-chevron" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 18 6-6-6-6"></path>
+              </svg>
+            </span>
+          </button>
+
+          <button class="saas-nav-item" data-page="colaboradores" type="button">
+            <span class="saas-nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </span>
+            Colaboradores
+          </button>
+
+          <button class="saas-nav-item" data-page="equipamentos" type="button">
+            <span class="saas-nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                <path d="M6 10h.01"></path>
+                <path d="M10 10h.01"></path>
+              </svg>
+            </span>
+            Equipamentos
+          </button>
+
+          <button class="saas-nav-item" data-page="atribuicoes" type="button">
+            <span class="saas-nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l1.92-1.92a5 5 0 0 0-7.07-7.07L11.5 5.5"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54L4.54 12.38a5 5 0 0 0 7.07 7.07L12.5 18.5"></path>
+              </svg>
+            </span>
+            Atribuições
+          </button>
+        </nav>
+
+        <div class="saas-user">
+          <div class="saas-user-avatar" id="userAvatar">A</div>
+          <div class="saas-user-info">
+            <div class="saas-user-name" id="userName">Usuário</div>
+            <div class="saas-user-role" id="userRole">Perfil</div>
+          </div>
+        </div>
+        <button id="saasLogout" class="saas-logout" type="button">
+          <span class="saas-nav-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <path d="M16 17l5-5-5-5"></path>
+              <path d="M21 12H9"></path>
+            </svg>
+          </span>
+          Sair do Sistema
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="saas-main">
+      <!-- Topbar -->
+      <header class="saas-topbar">
+        <button id="saasSidebarOpen" class="saas-icon-btn saas-only-mobile" type="button" aria-label="Abrir menu">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h16"></path>
+            <path d="M4 12h16"></path>
+            <path d="M4 18h16"></path>
+          </svg>
+        </button>
+
+        <div class="saas-topbar-title">
+          <h1 id="pageTitle">Painel operacional</h1>
+          <p id="pageSubtitle">Visão geral da operação Boi Brabo</p>
+        </div>
+
+        <div class="saas-topbar-actions">
+          <button
+            id="saasThemeToggle"
+            class="theme-toggle"
+            type="button"
+            data-theme-toggle
+            aria-label="Alternar tema"
+            aria-pressed="false"
+          >
+            <span class="theme-toggle-icon theme-toggle-icon-sun" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2"></path>
+                <path d="M12 20v2"></path>
+                <path d="m4.93 4.93 1.41 1.41"></path>
+                <path d="m17.66 17.66 1.41 1.41"></path>
+                <path d="M2 12h2"></path>
+                <path d="M20 12h2"></path>
+                <path d="m6.34 17.66-1.41 1.41"></path>
+                <path d="m19.07 4.93-1.41 1.41"></path>
+              </svg>
+            </span>
+            <span class="theme-toggle-icon theme-toggle-icon-moon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3a6 6 0 1 0 9 9 9 9 0 1 1-9-9"></path>
+              </svg>
+            </span>
+            <span class="theme-toggle-label" data-theme-label>Tema</span>
+          </button>
+          <div class="saas-date-pill" id="saasDatePill">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 6v6l4 2"></path>
+            </svg>
+            <span id="currentDate"></span>
+          </div>
+          <button id="saasTopLogout" class="saas-top-logout" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <path d="M16 17l5-5-5-5"></path>
+              <path d="M21 12H9"></path>
+            </svg>
+            <span class="saas-hide-sm">Sair</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="saas-content">
+        <div class="saas-container">
+          <div id="globalMsg" class="saas-msg" role="alert"></div>
+
+          <!-- PAGE: Dashboard -->
+          <section class="saas-page" data-page="dashboard">
+            <div class="saas-welcome">
+              <div class="saas-welcome-decor" aria-hidden="true">
+                <div class="saas-welcome-blob b1"></div>
+                <div class="saas-welcome-blob b2"></div>
+              </div>
+              <div class="saas-welcome-text">
+                <span class="saas-eyebrow">Painel operacional</span>
+                <h2>Painel de controle</h2>
+                <p>Acompanhe equipamentos, disponibilidade e movimentações com uma visão operacional clara, organizada e confiável.</p>
+              </div>
+              <div class="saas-welcome-brand" aria-hidden="true">
+                <div class="saas-welcome-glow"></div>
+                <img
+                  src="./assets/boi_brabo.png"
+                  alt=""
+                  class="saas-welcome-logo"
+                />
+              </div>
+            </div>
+
+            <div class="saas-stats-grid">
+              <div class="saas-stat card-hover" data-stat="equipamentos-total">
+                <div class="saas-stat-meta">
+                  <div class="saas-stat-title">Total de equipamentos</div>
+                  <div class="saas-stat-value" id="statEquipamentos">—</div>
+                  <div class="saas-stat-trend">Equipamentos registrados no sistema</div>
+                </div>
+                <div class="saas-stat-icon grad-emerald" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73Z"></path>
+                    <path d="M3.3 7l8.7 5 8.7-5"></path>
+                    <path d="M12 22V12"></path>
+                  </svg>
+                </div>
+              </div>
+
+              <div class="saas-stat card-hover" data-stat="equipamentos-disponiveis">
+                <div class="saas-stat-meta">
+                  <div class="saas-stat-title">Disponíveis</div>
+                  <div class="saas-stat-value" id="statDisponiveis">—</div>
+                  <div class="saas-stat-trend">Prontos para nova utilização</div>
+                </div>
+                <div class="saas-stat-icon grad-blue" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </div>
+              </div>
+
+              <div class="saas-stat card-hover" data-stat="equipamentos-em-uso">
+                <div class="saas-stat-meta">
+                  <div class="saas-stat-title">Em uso</div>
+                  <div class="saas-stat-value" id="statAtribuidos">—</div>
+                  <div class="saas-stat-trend">Equipamentos vinculados no momento</div>
+                </div>
+                <div class="saas-stat-icon grad-violet" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14.7 6.3a1 1 0 0 0-1.4 0l-1 1 5.4 5.4 1-1a1 1 0 0 0 0-1.4z"></path>
+                    <path d="m12.3 7.3-8.6 8.6a2 2 0 0 0-.5.9L2 22l5.2-1.2a2 2 0 0 0 .9-.5l8.6-8.6"></path>
+                    <path d="m16 5 3 3"></path>
+                  </svg>
+                </div>
+              </div>
+
+              <div class="saas-stat card-hover" data-stat="equipamentos-aguardando">
+                <div class="saas-stat-meta">
+                  <div class="saas-stat-title">Aguardando atribuição</div>
+                  <div class="saas-stat-value" id="statAguardando">—</div>
+                  <div class="saas-stat-trend">Equipamentos livres aguardando novo vínculo</div>
+                </div>
+                <div class="saas-stat-icon grad-amber" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 8v4"></path>
+                    <path d="M12 16h.01"></path>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="saas-grid-2">
+              <section class="saas-panel">
+                <div class="saas-panel-head">
+                  <div class="saas-panel-title-group">
+                    <h3>Atividades Recentes</h3>
+                    <p>Últimas movimentações registradas na operação</p>
+                  </div>
+                  <button class="saas-link-btn" type="button" id="viewAllActivities">
+                    Ir para atribuições
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="m9 18 6-6-6-6"></path>
+                    </svg>
+                  </button>
+                </div>
+                <div class="saas-activity-list" id="activityList"></div>
+              </section>
+
+              <section class="saas-panel">
+                <div class="saas-panel-head">
+                  <div class="saas-panel-title-group">
+                    <h3>Ações Rápidas</h3>
+                    <p>Atalhos para as operações mais usadas no dia a dia</p>
+                  </div>
+                </div>
+                <div class="saas-quick">
+                  <button class="saas-quick-btn primary" type="button" data-go="colaboradores">
+                    <span class="saas-quick-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M19 8v6"></path>
+                        <path d="M22 11h-6"></path>
+                      </svg>
+                    </span>
+                    <span>Novo Colaborador</span>
+                    <span class="saas-quick-chev" aria-hidden="true">›</span>
+                  </button>
+
+                  <button class="saas-quick-btn" type="button" data-go="equipamentos">
+                    <span class="saas-quick-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73Z"></path>
+                        <path d="M12 22V12"></path>
+                        <path d="M3.3 7l8.7 5 8.7-5"></path>
+                      </svg>
+                    </span>
+                    <span>Novo Equipamento</span>
+                    <span class="saas-quick-chev" aria-hidden="true">›</span>
+                  </button>
+
+                  <button class="saas-quick-btn" type="button" data-go="atribuicoes">
+                    <span class="saas-quick-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l1.92-1.92a5 5 0 0 0-7.07-7.07L11.5 5.5"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54L4.54 12.38a5 5 0 0 0 7.07 7.07L12.5 18.5"></path>
+                      </svg>
+                    </span>
+                    <span>Nova Atribuição</span>
+                    <span class="saas-quick-chev" aria-hidden="true">›</span>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <!-- PAGE: Colaboradores (mantém funcionalidades do sistema atual) -->
+          <section class="saas-page" data-page="colaboradores" hidden>
+            <div class="saas-colab-page">
+              <div class="saas-insight-grid compact">
+                <div class="saas-insight-card tone-blue compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M20 8v6"></path>
+                      <path d="M23 11h-6"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Total de colaboradores</span>
+                    <strong id="colaboradoresMetricTotal">0</strong>
+                    <small>Equipe cadastrada</small>
+                  </div>
+                </div>
+
+                <div class="saas-insight-card tone-emerald compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 21h18"></path>
+                      <path d="M5 21V7l8-4v18"></path>
+                      <path d="M19 21V11l-6-4"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Setores ativos</span>
+                    <strong id="colaboradoresMetricSetores">0</strong>
+                    <small>Distribuição da operação</small>
+                  </div>
+                </div>
+
+                <div class="saas-insight-card tone-violet compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="7" width="18" height="13" rx="2"></rect>
+                      <path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"></path>
+                      <path d="M12 12h.01"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Cargos registrados</span>
+                    <strong id="colaboradoresMetricCargos">0</strong>
+                    <small>Funções mapeadas</small>
+                  </div>
+                </div>
+              </div>
+
+              <section class="saas-panel saas-colab-shell">
+                <div class="saas-panel-head no-border">
+                  <div class="saas-panel-title-group">
+                    <h3>Equipe cadastrada</h3>
+                    <p>Gerencie todos os colaboradores da operação em um só painel.</p>
+                  </div>
+                </div>
+
+                <div class="table-header colab-toolbar">
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome..."
+                    class="table-search"
+                    id="colaboradoresSearch"
+                  />
+                  <button class="saas-btn primary" type="button" id="colaboradorNewBtn">
+                    + Novo colaborador
+                  </button>
+                </div>
+                <div class="table-filters">
+                  <select id="colaboradoresSetorFilter" class="table-select">
+                    <option value="">Todos os setores</option>
+                  </select>
+                  <select id="colaboradoresCargoFilter" class="table-select">
+                    <option value="">Todos os cargos</option>
+                  </select>
+                  <div class="table-filters-actions">
+                    <button class="saas-btn saas-btn-ghost" type="button" id="colaboradoresClearFiltersBtn">
+                      Limpar filtros
+                    </button>
+                  </div>
+                </div>
+                <div class="table-filters-meta">
+                  <div class="table-filters-badges">
+                    <span class="table-filter-pill" id="colaboradoresActiveFilters">Nenhum filtro ativo</span>
+                    <span class="table-filter-pill is-neutral" id="colaboradoresResultsCount">0 resultados</span>
+                  </div>
+                  <div class="table-active-filters" id="colaboradoresActiveFilterTags"></div>
+                </div>
+
+                <div class="saas-colab-form-drawer" id="colaboradorFormPanel" hidden>
+                  <div class="saas-drawer-head">
+                    <strong>Novo colaborador</strong>
+                    <span>Cadastre rapidamente um novo membro da equipe com os dados principais.</span>
+                  </div>
+                  <form id="colaboradorForm" class="saas-form-grid inputs-group" novalidate>
+                    <div class="saas-field">
+                      <label for="nome">Nome <span class="required">*</span></label>
+                      <input id="nome" placeholder="Ex: João Silva" autocomplete="name" required />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="cpf">CPF <span class="required">*</span></label>
+                      <input id="cpf" placeholder="000.000.000-00" inputmode="numeric" maxlength="14" required />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="cargo">Cargo <span class="required">*</span></label>
+                      <input id="cargo" placeholder="Ex: Analista de Estoque" required />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="setor">Setor <span class="required">*</span></label>
+                      <input id="setor" placeholder="Ex: Logística" required />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-actions">
+                      <button class="saas-btn primary" type="submit">Cadastrar colaborador</button>
+                    </div>
+                  </form>
+                </div>
+
+                <div class="saas-table-wrap flush" id="colaboradoresTableWrap">
+                  <table class="saas-table saas-colab-table" id="colaboradoresTable">
+                    <thead>
+                      <tr>
+                        <th>Colaborador</th>
+                        <th>Cargo</th>
+                        <th>Setor</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="table-pagination">
+                  <button class="saas-btn saas-btn-sm" type="button" id="colaboradoresPrevBtn">
+                    Anterior
+                  </button>
+                  <span id="colaboradoresPageInfo">Página 1 de 1</span>
+                  <button class="saas-btn saas-btn-sm" type="button" id="colaboradoresNextBtn">
+                    Próximo
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <!-- PAGE: Equipamentos -->
+          <section class="saas-page" data-page="equipamentos" hidden>
+            <div class="saas-colab-page">
+              <div class="saas-insight-grid compact">
+                <div class="saas-insight-card tone-blue compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73Z"></path>
+                      <path d="M3.3 7l8.7 5 8.7-5"></path>
+                      <path d="M12 22V12"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Total de equipamentos</span>
+                    <strong id="equipamentosMetricTotal">0</strong>
+                    <small>Equipamentos registrados no sistema</small>
+                  </div>
+                </div>
+
+                <div class="saas-insight-card tone-emerald compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 6 9 17l-5-5"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Disponíveis</span>
+                    <strong id="equipamentosMetricDisponiveis">0</strong>
+                    <small>Prontos para uso</small>
+                  </div>
+                </div>
+
+                <div class="saas-insight-card tone-violet compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14.7 6.3a1 1 0 0 0-1.4 0l-1 1 5.4 5.4 1-1a1 1 0 0 0 0-1.4z"></path>
+                      <path d="m12.3 7.3-8.6 8.6a2 2 0 0 0-.5.9L2 22l5.2-1.2a2 2 0 0 0 .9-.5l8.6-8.6"></path>
+                      <path d="m16 5 3 3"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Em uso</span>
+                    <strong id="equipamentosMetricEmUso">0</strong>
+                    <small>Equipamentos vinculados no momento</small>
+                  </div>
+                </div>
+              </div>
+
+              <section class="saas-panel saas-colab-shell">
+                <div class="saas-panel-head no-border">
+                  <div class="saas-panel-title-group">
+                    <h3>Inventário de equipamentos</h3>
+                    <p>Controle os equipamentos cadastrados, acompanhe o status e localize rapidamente.</p>
+                  </div>
+                </div>
+
+                <div class="table-header colab-toolbar">
+                  <input
+                    id="eq_busca_codigo_barras"
+                    placeholder="Buscar por nome, marca ou código..."
+                    class="table-search"
+                  />
+                  <button class="saas-btn primary" type="button" id="equipamentoNewBtn">
+                    + Novo equipamento
+                  </button>
+                </div>
+                <div class="table-filters">
+                  <select id="equipamentosSituacaoFilter" class="table-select">
+                    <option value="ativo">Somente ativos</option>
+                    <option value="inativo">Somente inativos</option>
+                    <option value="all">Todos os registros</option>
+                  </select>
+                  <select id="equipamentosDisponibilidadeFilter" class="table-select">
+                    <option value="all">Todos os status</option>
+                    <option value="disponivel">Disponíveis</option>
+                    <option value="em uso">Em uso</option>
+                  </select>
+                  <div class="table-filters-actions">
+                    <button class="saas-btn saas-btn-ghost" type="button" id="equipamentosClearFiltersBtn">
+                      Limpar filtros
+                    </button>
+                  </div>
+                </div>
+                <div class="table-filters-meta">
+                  <div class="table-filters-badges">
+                    <span class="table-filter-pill" id="equipamentosActiveFilters">Nenhum filtro ativo</span>
+                    <span class="table-filter-pill is-neutral" id="equipamentosResultsCount">0 resultados</span>
+                  </div>
+                  <div class="table-active-filters" id="equipamentosActiveFilterTags"></div>
+                </div>
+
+                <div class="saas-colab-form-drawer" id="equipamentoFormPanel" hidden>
+                  <div class="saas-drawer-head">
+                    <strong id="equipamentoDrawerTitle">Cadastrar equipamento</strong>
+                    <span id="equipamentoDrawerSubtitle">Preencha os dados do ativo. O código será gerado automaticamente pelo sistema.</span>
+                  </div>
+                  <form id="equipamentoForm" class="saas-form-grid inputs-group" novalidate>
+                    <input id="eq_id" type="hidden" />
+                    <div class="saas-field">
+                      <label for="eq_nome">Nome <span class="required">*</span></label>
+                      <input id="eq_nome" placeholder="Ex: Coletor Zebra TC21" required />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="eq_marca">Marca <span class="required">*</span></label>
+                      <input id="eq_marca" placeholder="Ex: Zebra" required />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="eq_status">Status <span class="required">*</span></label>
+                      <select id="eq_status" required>
+                        <option value="" selected disabled>Selecione o status</option>
+                        <option value="disponivel">Disponível</option>
+                        <option value="em uso">Em uso</option>
+                      </select>
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-actions">
+                      <button class="saas-btn primary" id="equipamentoSubmitBtn" type="submit">Cadastrar equipamento</button>
+                    </div>
+                  </form>
+                </div>
+
+                <div class="saas-table-wrap flush" id="equipamentosTableWrap">
+                  <table class="saas-table saas-equip-table" id="equipamentosTable">
+                    <thead>
+                      <tr>
+                        <th class="is-main">Equipamento</th>
+                        <th class="is-brand">Marca</th>
+                        <th class="is-code">Código</th>
+                        <th class="is-status">Status</th>
+                        <th class="is-actions">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="table-pagination">
+                  <button class="saas-btn saas-btn-sm" type="button" id="equipamentosPrevBtn">
+                    Anterior
+                  </button>
+                  <span id="equipamentosPageInfo">Página 1 de 1</span>
+                  <button class="saas-btn saas-btn-sm" type="button" id="equipamentosNextBtn">
+                    Próximo
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <!-- PAGE: Atribuições (atribuir + listar + devolver) -->
+          <section class="saas-page" data-page="atribuicoes" hidden>
+            <div class="saas-colab-page">
+              <div class="saas-insight-grid compact">
+                <div class="saas-insight-card tone-blue compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l1.92-1.92a5 5 0 0 0-7.07-7.07L11.5 5.5"></path>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54L4.54 12.38a5 5 0 0 0 7.07 7.07L12.5 18.5"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Atribuições ativas</span>
+                    <strong id="atribuicoesMetricAtivas">0</strong>
+                    <small>Equipamentos em uso</small>
+                  </div>
+                </div>
+
+                <div class="saas-insight-card tone-emerald compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="m16 11 2 2 4-4"></path>
+                      <path d="M16 7h6"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Colaboradores com item</span>
+                    <strong id="atribuicoesMetricColaboradores">0</strong>
+                    <small>Responsáveis ativos</small>
+                  </div>
+                </div>
+
+                <div class="saas-insight-card tone-violet compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 3v12"></path>
+                      <path d="m8 11 4 4 4-4"></path>
+                      <path d="M5 21h14"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Disponíveis para atribuir</span>
+                    <strong id="atribuicoesMetricDisponiveis">0</strong>
+                    <small>Equipamentos livres</small>
+                  </div>
+                </div>
+              </div>
+
+              <section class="saas-panel saas-colab-shell">
+                <div class="saas-panel-head no-border">
+                  <div class="saas-panel-title-group">
+                    <h3>Atribuições e histórico</h3>
+                    <p>Filtre entregas por status, período e encontre rapidamente qualquer movimentação.</p>
+                  </div>
+                </div>
+
+                <div class="table-header colab-toolbar">
+                  <input
+                    id="atribuicoesSearch"
+                    placeholder="Buscar por colaborador, equipamento ou código..."
+                    class="table-search"
+                  />
+                  <button class="saas-btn primary" type="button" id="atribuicaoNewBtn">
+                    + Nova atribuição
+                  </button>
+                </div>
+                <div class="table-filters">
+                  <select id="atribuicoesStatusFilter" class="table-select">
+                    <option value="ativo">Somente ativas</option>
+                    <option value="finalizado">Somente finalizadas</option>
+                    <option value="all">Ativas e finalizadas</option>
+                  </select>
+                  <input id="atribuicoesDataInicial" type="date" class="table-select" />
+                  <input id="atribuicoesDataFinal" type="date" class="table-select" />
+                  <div class="table-filters-actions">
+                    <button class="saas-btn saas-btn-ghost" type="button" id="atribuicoesClearFiltersBtn">
+                      Limpar filtros
+                    </button>
+                  </div>
+                </div>
+                <div class="table-filters-meta">
+                  <div class="table-filters-badges">
+                    <span class="table-filter-pill" id="atribuicoesActiveFilters">Nenhum filtro ativo</span>
+                    <span class="table-filter-pill is-neutral" id="atribuicoesResultsCount">0 resultados</span>
+                  </div>
+                  <div class="table-active-filters" id="atribuicoesActiveFilterTags"></div>
+                </div>
+
+                <div class="saas-colab-form-drawer" id="atribuicaoFormPanel" hidden>
+                  <div class="saas-drawer-head">
+                    <strong>Nova atribuição</strong>
+                    <span>Selecione o responsável e o equipamento disponível para concluir a entrega.</span>
+                  </div>
+                  <form id="atribuirForm" class="saas-form-grid one-col" novalidate>
+                    <div class="saas-field">
+                      <label for="atrib_colaborador">Colaborador <span class="required">*</span></label>
+                      <select id="atrib_colaborador" required></select>
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="atrib_equipamento">Equipamento disponível <span class="required">*</span></label>
+                      <select id="atrib_equipamento" required></select>
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-actions">
+                      <button class="saas-btn primary" type="submit">Confirmar atribuição</button>
+                    </div>
+                  </form>
+                </div>
+
+                <div class="saas-table-wrap flush" id="atribuicoesTableWrap">
+                  <table class="saas-table saas-attr-table" id="atribuicoesTable">
+                    <thead>
+                      <tr>
+                        <th class="is-main">Colaborador</th>
+                        <th class="is-main">Equipamento</th>
+                        <th class="is-code">Código</th>
+                        <th class="is-date">Data</th>
+                        <th class="is-actions">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="table-pagination">
+                  <button class="saas-btn saas-btn-sm" type="button" id="atribuicoesPrevBtn">
+                    Anterior
+                  </button>
+                  <span id="atribuicoesPageInfo">Página 1 de 1</span>
+                  <button class="saas-btn saas-btn-sm" type="button" id="atribuicoesNextBtn">
+                    Próximo
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script src="./node_modules/dayjs/dayjs.min.js"></script>
+    <script src="./node_modules/dayjs/plugin/relativeTime.js"></script>
+    <script src="./node_modules/dayjs/locale/pt-br.js"></script>
+    <script src="./js/toast.js"></script>
+    <script src="./js/theme.js"></script>
+    <script src="./js/dashboard.js"></script>
+  </body>
+</html>
+
