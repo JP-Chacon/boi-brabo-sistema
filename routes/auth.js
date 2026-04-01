@@ -92,5 +92,58 @@ async function logout(req, res) {
   }
 }
 
-module.exports = { login, logout, hashToken };
+async function register(req, res) {
+  const { nome, usuario, senha, confirmPassword } = req.body || {};
+  const safeNome = String(nome || "").trim();
+  const safeUsuario = String(usuario || "").trim();
+  const safeSenha = String(senha || "");
+  const safeConfirm = String(confirmPassword || "");
+  const normalizedPerfil = "operador";
+
+  if (!safeNome || !safeUsuario || !safeSenha) {
+    return res.status(400).json({ error: "Campos obrigatórios: nome, usuario, senha" });
+  }
+
+  if (safeSenha !== safeConfirm) {
+    return res.status(400).json({ error: "As senhas não coincidem" });
+  }
+
+  if (safeSenha.length < 4) {
+    return res.status(400).json({ error: "A senha deve ter pelo menos 4 caracteres." });
+  }
+
+  try {
+    const existing = await get(`SELECT id FROM usuarios WHERE usuario = ?`, [safeUsuario]);
+    if (existing?.id) {
+      return res.status(409).json({ error: "Usuário já cadastrado." });
+    }
+
+    const passwordHash = await bcrypt.hash(safeSenha, 12);
+    const result = await run(
+      `
+        INSERT INTO usuarios (nome, usuario, senha_hash, perfil, criado_em)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [safeNome, safeUsuario, passwordHash, normalizedPerfil, new Date().toISOString()]
+    );
+
+    return res.status(201).json({
+      ok: true,
+      id: result.lastID,
+      user: {
+        id: result.lastID,
+        nome: safeNome,
+        usuario: safeUsuario,
+        perfil: normalizedPerfil,
+      },
+    });
+  } catch (err) {
+    if (String(err?.message || "").toLowerCase().includes("unique")) {
+      return res.status(409).json({ error: "Usuário já cadastrado." });
+    }
+    return res.status(500).json({ error: "Erro ao cadastrar usuário" });
+  }
+}
+
+module.exports = { login, logout, register, hashToken };
 

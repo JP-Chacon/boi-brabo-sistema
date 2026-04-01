@@ -29,6 +29,7 @@
 
   const pages = Array.from(document.querySelectorAll(".saas-page"));
   const navItems = Array.from(document.querySelectorAll(".saas-nav-item"));
+  const usuariosNavItem = document.getElementById("menu-usuarios");
 
   // Stats
   const statColaboradores = document.getElementById("statColaboradores");
@@ -48,12 +49,14 @@
   const colaboradoresTbody = document.querySelector("#colaboradoresTable tbody");
   const equipamentosTbody = document.querySelector("#equipamentosTable tbody");
   const atribuicoesTbody = document.querySelector("#atribuicoesTable tbody");
+  const usuariosTbody = document.querySelector("#usuariosTable tbody");
   const colaboradoresTableWrap = document.getElementById("colaboradoresTableWrap");
   const equipamentosTableWrap = document.getElementById("equipamentosTableWrap");
   const atribuicoesTableWrap = document.getElementById("atribuicoesTableWrap");
+  const usuariosTableWrap = document.getElementById("usuariosTableWrap");
 
   const colaboradoresSearch = document.getElementById("colaboradoresSearch");
-  const colaboradoresSetorFilter = document.getElementById("colaboradoresSetorFilter");
+  const colaboradoresDepartamentoFilter = document.getElementById("colaboradoresDepartamentoFilter");
   const colaboradoresCargoFilter = document.getElementById("colaboradoresCargoFilter");
   const colaboradoresClearFiltersBtn = document.getElementById("colaboradoresClearFiltersBtn");
   const colaboradoresActiveFilters = document.getElementById("colaboradoresActiveFilters");
@@ -65,7 +68,9 @@
   const colaboradoresNextBtn = document.getElementById("colaboradoresNextBtn");
   const colaboradoresPageInfo = document.getElementById("colaboradoresPageInfo");
   const colaboradoresMetricTotal = document.getElementById("colaboradoresMetricTotal");
-  const colaboradoresMetricSetores = document.getElementById("colaboradoresMetricSetores");
+  const colaboradoresMetricDepartamentos = document.getElementById(
+    "colaboradoresMetricDepartamentos"
+  );
   const colaboradoresMetricCargos = document.getElementById("colaboradoresMetricCargos");
 
   const eqBusca = document.getElementById("eq_busca_codigo_barras");
@@ -103,6 +108,11 @@
   const atribuicoesPageInfo = document.getElementById("atribuicoesPageInfo");
   const atribColaborador = document.getElementById("atrib_colaborador");
   const atribEquipamento = document.getElementById("atrib_equipamento");
+  const atribEquipamentoList = document.getElementById("atrib_equipamento_list");
+  const atribEquipamentoTags = document.getElementById("atrib_equipamento_tags");
+  const atribEquipamentoSelectedWrap = document.getElementById("atrib_equipamento_selected_wrap");
+  const atribEquipamentoPlaceholder = document.getElementById("atrib_equipamento_placeholder");
+  const atribEquipamentoPicker = document.getElementById("atrib_equipamento_picker");
   const atribuicoesMetricAtivas = document.getElementById("atribuicoesMetricAtivas");
   const atribuicoesMetricColaboradores = document.getElementById("atribuicoesMetricColaboradores");
   const atribuicoesMetricDisponiveis = document.getElementById("atribuicoesMetricDisponiveis");
@@ -137,7 +147,7 @@
   let isPageTransitioning = false;
   let queuedPage = null;
   let isApplyingUrlState = false;
-  const VALID_PAGE_NAMES = new Set(["dashboard", "colaboradores", "equipamentos", "atribuicoes"]);
+  const VALID_PAGE_NAMES = new Set(["dashboard", "colaboradores", "equipamentos", "atribuicoes", "usuarios"]);
 
   function displayStatusText(status) {
     const value = String(status || "").trim().toLowerCase();
@@ -159,7 +169,7 @@
   function countColaboradoresActiveFilters() {
     let count = 0;
     if (hasValue(colaboradoresSearch?.value)) count += 1;
-    if (hasValue(colaboradoresSetorFilter?.value)) count += 1;
+    if (hasValue(colaboradoresDepartamentoFilter?.value)) count += 1;
     if (hasValue(colaboradoresCargoFilter?.value)) count += 1;
     return count;
   }
@@ -188,7 +198,7 @@
 
   function updateFilterVisualState() {
     setFilterControlState(colaboradoresSearch, hasValue(colaboradoresSearch?.value));
-    setFilterControlState(colaboradoresSetorFilter, hasValue(colaboradoresSetorFilter?.value));
+    setFilterControlState(colaboradoresDepartamentoFilter, hasValue(colaboradoresDepartamentoFilter?.value));
     setFilterControlState(colaboradoresCargoFilter, hasValue(colaboradoresCargoFilter?.value));
 
     setFilterControlState(eqBusca, hasValue(eqBusca?.value));
@@ -221,8 +231,12 @@
     if (hasValue(colaboradoresSearch?.value)) {
       entries.push({ key: "busca", label: "Busca", value: String(colaboradoresSearch.value).trim() });
     }
-    if (hasValue(colaboradoresSetorFilter?.value)) {
-      entries.push({ key: "setor", label: "Setor", value: String(colaboradoresSetorFilter.value).trim() });
+    if (hasValue(colaboradoresDepartamentoFilter?.value)) {
+      entries.push({
+        key: "departamento",
+        label: "Departamento",
+        value: String(colaboradoresDepartamentoFilter.value).trim(),
+      });
     }
     if (hasValue(colaboradoresCargoFilter?.value)) {
       entries.push({ key: "cargo", label: "Cargo", value: String(colaboradoresCargoFilter.value).trim() });
@@ -401,6 +415,62 @@
     }
   }
 
+  function getStoredUserProfile() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(USER_KEY));
+      const raw = String(parsed?.profile || parsed?.perfil || "").trim().toLowerCase();
+      return raw === "admin" ? "admin" : "operador";
+    } catch {
+      return "operador";
+    }
+  }
+
+  function getStoredUserId() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(USER_KEY));
+      return Number(parsed?.id || 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  function isAdminUser() {
+    return getStoredUserProfile() === "admin";
+  }
+
+  function canManageCriticalData() {
+    return isAdminUser();
+  }
+
+  function canManageUsers() {
+    return isAdminUser();
+  }
+
+  function applyAdminVisibility() {
+    const isAdmin = isAdminUser();
+    if (usuariosNavItem) {
+      if (!isAdmin) {
+        usuariosNavItem.remove();
+      } else {
+        usuariosNavItem.hidden = false;
+      }
+    }
+    if (!isAdmin && currentPage === "usuarios") {
+      showMsg("Acesso restrito a administradores.", "warning");
+      showPage("dashboard");
+    }
+
+    const canManage = canManageCriticalData();
+    if (colaboradorNewBtn) colaboradorNewBtn.hidden = !canManage;
+    if (equipamentoNewBtn) equipamentoNewBtn.hidden = !canManage;
+    if (atribuicaoNewBtn) atribuicaoNewBtn.hidden = false;
+    if (cargoAddBtn) {
+      cargoAddBtn.disabled =
+        !canManage || !departamentoSelect?.value;
+    }
+    if (departamentoAddBtn) departamentoAddBtn.disabled = !canManage;
+  }
+
   function normalizeTextCase(value) {
     const smallWords = new Set(["de", "da", "do", "das", "dos", "e"]);
     const acronyms = new Set(["ti", "rh", "pcp", "dp", "qa", "bi", "tii"]);
@@ -509,6 +579,21 @@
     return `<span class="saas-badge ${cls}"><span class="saas-badge-dot"></span>${escapeHtml(displayStatusText(status))}</span>`;
   }
 
+  function perfilBadge(perfil) {
+    const value = String(perfil || "").trim().toLowerCase();
+    const label = value === "admin" ? "Admin" : "Operador";
+    const cls = value === "admin" ? "info" : "neutral";
+    return `<span class="saas-badge ${cls}">${escapeHtml(label)}</span>`;
+  }
+
+  function actionStateBadge(kind) {
+    const value = String(kind || "").trim().toLowerCase();
+    if (value === "self") {
+      return `<span class="saas-badge neutral">${escapeHtml("Sessão atual")}</span>`;
+    }
+    return "";
+  }
+
   function getDateInstance(value) {
     const raw = String(value || "").trim();
     if (!raw) return null;
@@ -564,7 +649,10 @@
   function getEditableFields(form) {
     if (!form) return [];
     return Array.from(form.querySelectorAll("input, select")).filter(
-      (field) => !field.disabled && field.type !== "hidden"
+      (field) =>
+        !field.disabled &&
+        field.type !== "hidden" &&
+        !field.classList.contains("atrib-equip-hidden-select")
     );
   }
 
@@ -659,7 +747,10 @@
     resetEquipamentoForm();
     if (equipamentoIdInput) equipamentoIdInput.value = String(item.id);
     document.getElementById("eq_nome").value = String(item.nome || "");
+    document.getElementById("eq_serial").value = String(item.serial || "");
+    document.getElementById("eq_modelo").value = String(item.modelo || "");
     document.getElementById("eq_marca").value = String(item.marca || "");
+    document.getElementById("eq_observacoes").value = String(item.observacoes || "");
     document.getElementById("eq_status").value = String(item.status || "");
     if (equipamentoDrawerTitle) equipamentoDrawerTitle.textContent = "Editar equipamento";
     if (equipamentoDrawerSubtitle) {
@@ -678,6 +769,81 @@
     atribuicaoFormPanel.classList.toggle("is-open", isOpen);
     if (atribuicaoNewBtn) {
       atribuicaoNewBtn.textContent = isOpen ? "Fechar atribuição" : "+ Nova atribuição";
+    }
+  }
+
+  const cargoSelect = document.getElementById("cargo");
+  const cargoNovoInput = document.getElementById("cargoNovo");
+  const cargoAddBtn = document.getElementById("cargoAddBtn");
+  const departamentoSelect = document.getElementById("departamento");
+  const departamentoNovoInput = document.getElementById("departamentoNovo");
+  const departamentoAddBtn = document.getElementById("departamentoAddBtn");
+
+  async function loadDepartamentos({ preserveSelection = true, selectId = null } = {}) {
+    if (!departamentoSelect) return;
+    const current = preserveSelection ? String(departamentoSelect.value || "") : "";
+    try {
+      const deps = await request("/departamentos");
+      departamentoSelect.innerHTML = '<option value="" selected disabled>Selecione o departamento</option>';
+      for (const d of Array.isArray(deps) ? deps : []) {
+        const opt = document.createElement("option");
+        opt.value = String(d.id);
+        opt.textContent = String(d.nome || "");
+        departamentoSelect.appendChild(opt);
+      }
+      const nextValue = selectId != null ? String(selectId) : current;
+      if (nextValue) departamentoSelect.value = nextValue;
+    } catch {
+      departamentoSelect.innerHTML =
+        '<option value="" selected disabled>Não foi possível carregar departamentos</option>';
+    }
+  }
+
+  function filtrarCargosPorDepartamento(departamentoId) {
+    return loadCargosForDepartamento(departamentoId, { preserveSelection: false });
+  }
+
+  async function loadCargosForDepartamento(
+    departamentoId,
+    { preserveSelection = false, selectId = null } = {}
+  ) {
+    if (!cargoSelect) return;
+    const depNum = Number(departamentoId);
+    const current = preserveSelection ? String(cargoSelect.value || "") : "";
+
+    if (!Number.isInteger(depNum) || depNum <= 0) {
+      cargoSelect.innerHTML =
+        '<option value="" selected disabled>Selecione o departamento primeiro</option>';
+      cargoSelect.disabled = true;
+      cargoSelect.value = "";
+      if (cargoNovoInput) {
+        cargoNovoInput.value = "";
+        cargoNovoInput.disabled = true;
+      }
+      if (cargoAddBtn) cargoAddBtn.disabled = true;
+      return;
+    }
+
+    cargoSelect.disabled = false;
+    if (cargoNovoInput) cargoNovoInput.disabled = false;
+    if (cargoAddBtn) cargoAddBtn.disabled = !canManageCriticalData();
+
+    try {
+      const rows = await request(`/cargos?departamento_id=${encodeURIComponent(depNum)}`);
+      cargoSelect.innerHTML = '<option value="" selected disabled>Selecione o cargo</option>';
+      for (const c of Array.isArray(rows) ? rows : []) {
+        const opt = document.createElement("option");
+        opt.value = String(c.id);
+        opt.textContent = String(c.nome || "");
+        cargoSelect.appendChild(opt);
+      }
+      const nextValue = selectId != null ? String(selectId) : current;
+      if (nextValue && Array.from(cargoSelect.options).some((o) => o.value === nextValue)) {
+        cargoSelect.value = nextValue;
+      }
+    } catch {
+      cargoSelect.innerHTML =
+        '<option value="" selected disabled>Não foi possível carregar cargos</option>';
     }
   }
 
@@ -737,28 +903,28 @@
       validate: (value) => (isValidCpf(value) ? "" : "CPF inválido."),
     },
     cargo: {
-      requiredMessage: "Informe o cargo.",
-      normalizeOnBlur: normalizeTextCase,
-      validate: (value) =>
-        value.length >= 2 ? "" : "Informe o cargo do colaborador.",
+      requiredMessage: "Selecione um cargo.",
     },
-    setor: {
-      requiredMessage: "Informe o setor.",
-      normalizeOnBlur: normalizeTextCase,
-      validate: (value) =>
-        value.length >= 2 ? "" : "Informe o setor do colaborador.",
+    departamento: {
+      requiredMessage: "Selecione um departamento.",
     },
     eq_nome: {
       requiredMessage: "Informe o nome do equipamento.",
       validate: (value) =>
         value.length >= 3 ? "" : "Informe o nome do equipamento.",
     },
+    eq_serial: {
+      requiredMessage: "Informe o serial.",
+      validate: (value) => (value.length >= 3 ? "" : "Informe um serial válido."),
+    },
+    eq_modelo: {},
     eq_marca: {
       requiredMessage: "Informe a marca.",
       normalizeOnBlur: normalizeTextCase,
       validate: (value) =>
         value.length >= 2 ? "" : "Informe a marca do equipamento.",
     },
+    eq_observacoes: {},
     eq_status: {
       requiredMessage: "Selecione o status do equipamento.",
     },
@@ -766,7 +932,11 @@
       requiredMessage: "Selecione um colaborador.",
     },
     atrib_equipamento: {
-      requiredMessage: "Selecione um equipamento disponível.",
+      requiredMessage: "Selecione pelo menos um equipamento disponível.",
+      validate: (_value, field) => {
+        const total = field?.selectedOptions?.length || 0;
+        return total > 0 ? "" : "Selecione pelo menos um equipamento disponível.";
+      },
     },
   };
 
@@ -792,6 +962,7 @@
   }
 
   function validateField(field, { forceTouch = false } = {}) {
+    if (field?.disabled) return true;
     if (!field?.id || !fieldRules[field.id]) return true;
     const rule = fieldRules[field.id];
     const rawValue = String(field.value || "");
@@ -801,7 +972,10 @@
     const touched = field.dataset.touched === "true";
     if (!touched && !forceTouch) return true;
 
-    if (!value) {
+    const isMultiSelect = field.tagName === "SELECT" && field.multiple;
+    const isEmptyMultiSelect = isMultiSelect && (field.selectedOptions?.length || 0) === 0;
+
+    if (!value || isEmptyMultiSelect) {
       if (rule.requiredMessage) {
         setFieldState(field, "invalid", rule.requiredMessage);
         return false;
@@ -825,6 +999,7 @@
     const fields = Array.from(form.querySelectorAll("input, select"));
     let isFormValid = true;
     fields.forEach((field) => {
+      if (field.disabled) return;
       if (!validateField(field, { forceTouch: true })) isFormValid = false;
     });
     return isFormValid;
@@ -859,6 +1034,7 @@
     });
 
     field.addEventListener("change", () => {
+      if (field.id === "atrib_equipamento") return;
       if (field.tagName === "SELECT" && field.value) focusNextField(field);
     });
 
@@ -901,7 +1077,7 @@
         message,
       });
     }
-    window.location.href = "login.html";
+    window.location.href = "/login.html";
   }
 
   function isTokenExpired() {
@@ -914,7 +1090,8 @@
   function getTokenOrRedirect() {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
-      window.location.href = "login.html";
+      clearAuthData();
+      window.location.href = "/login.html";
       return null;
     }
     if (isTokenExpired()) {
@@ -1025,6 +1202,10 @@
         title: "Atribuições",
         subtitle: "Entregas, devoluções e acompanhamento",
       },
+      usuarios: {
+        title: "Usuários",
+        subtitle: "Gerenciamento de acessos e perfis",
+      },
     }[page];
   }
 
@@ -1033,6 +1214,7 @@
     if (page === "colaboradores") loadColaboradores().catch(() => {});
     if (page === "equipamentos") loadEquipamentos().catch(() => {});
     if (page === "atribuicoes") loadAtribuicoesPage().catch(() => {});
+    if (page === "usuarios") loadUsuarios().catch(() => {});
   }
 
   function openAtribuicoesWithFilter(query) {
@@ -1051,7 +1233,9 @@
   function removeFilterChip(scope, key) {
     if (scope === "colaboradores") {
       if (key === "busca" && colaboradoresSearch) colaboradoresSearch.value = "";
-      if (key === "setor" && colaboradoresSetorFilter) colaboradoresSetorFilter.value = "";
+      if (key === "departamento" && colaboradoresDepartamentoFilter) {
+        colaboradoresDepartamentoFilter.value = "";
+      }
       if (key === "cargo" && colaboradoresCargoFilter) colaboradoresCargoFilter.value = "";
       colaboradoresCurrentPage = 1;
       updateFilterSummary();
@@ -1084,6 +1268,10 @@
 
   function showPage(page, { syncUrl = true, replaceHistory = false } = {}) {
     if (!page) return;
+    if (page === "usuarios" && !canManageUsers()) {
+      showMsg("Acesso restrito a administradores.", "warning");
+      return;
+    }
     if (isPageTransitioning) {
       queuedPage = page;
       return;
@@ -1172,7 +1360,7 @@
     if (!rows || !rows.length) {
       const hasFilters = Boolean(
         String(colaboradoresSearch?.value || "").trim() ||
-          String(colaboradoresSetorFilter?.value || "").trim() ||
+          String(colaboradoresDepartamentoFilter?.value || "").trim() ||
           String(colaboradoresCargoFilter?.value || "").trim()
       );
       renderEmptyRow(
@@ -1198,34 +1386,46 @@
           </div>
         </td>
         <td><span class="badge badge-role">${escapeHtml(r.cargo)}</span></td>
-        <td><span class="badge badge-role">${escapeHtml(r.setor)}</span></td>
+        <td><span class="badge badge-role">${escapeHtml(r.departamento || "—")}</span></td>
       `;
       highlightRowIfNeeded(tr, "colaboradores", r.id);
       colaboradoresTbody.appendChild(tr);
     }
   }
 
-  function populateColaboradoresFilterOptions(rows) {
+  async function refreshColaboradoresFilterDropdowns(rows) {
     const items = Array.isArray(rows) ? rows : [];
-    const setorAtual = String(colaboradoresSetorFilter?.value || "");
+    const depAtual = String(colaboradoresDepartamentoFilter?.value || "");
     const cargoAtual = String(colaboradoresCargoFilter?.value || "");
-    const setores = Array.from(
-      new Set(items.map((item) => String(item.setor || "").trim()).filter(Boolean))
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+    const fromRows = items
+      .map((item) => String(item.departamento || item.setor || "").trim())
+      .filter(Boolean);
+    let namesFromApi = [];
+    try {
+      const deps = await request("/departamentos");
+      namesFromApi = Array.isArray(deps) ? deps.map((d) => String(d.nome || "").trim()).filter(Boolean) : [];
+    } catch {
+      namesFromApi = [];
+    }
+    const departamentos = Array.from(new Set([...namesFromApi, ...fromRows])).sort((a, b) =>
+      a.localeCompare(b, "pt-BR")
+    );
+
+    if (colaboradoresDepartamentoFilter) {
+      colaboradoresDepartamentoFilter.innerHTML = '<option value="">Todos os departamentos</option>';
+      departamentos.forEach((nome) => {
+        const option = document.createElement("option");
+        option.value = nome;
+        option.textContent = nome;
+        colaboradoresDepartamentoFilter.appendChild(option);
+      });
+      colaboradoresDepartamentoFilter.value = depAtual;
+    }
+
     const cargos = Array.from(
       new Set(items.map((item) => String(item.cargo || "").trim()).filter(Boolean))
     ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-
-    if (colaboradoresSetorFilter) {
-      colaboradoresSetorFilter.innerHTML = '<option value="">Todos os setores</option>';
-      setores.forEach((setor) => {
-        const option = document.createElement("option");
-        option.value = setor;
-        option.textContent = setor;
-        colaboradoresSetorFilter.appendChild(option);
-      });
-      colaboradoresSetorFilter.value = setorAtual;
-    }
 
     if (colaboradoresCargoFilter) {
       colaboradoresCargoFilter.innerHTML = '<option value="">Todos os cargos</option>';
@@ -1241,15 +1441,17 @@
 
   function updateColaboradoresMetrics(rows) {
     const items = Array.isArray(rows) ? rows : [];
-    const setores = new Set(
-      items.map((item) => String(item.setor || "").trim()).filter(Boolean)
+    const departamentosUnicos = new Set(
+      items.map((item) => String(item.departamento || item.setor || "").trim()).filter(Boolean)
     );
     const cargos = new Set(
       items.map((item) => String(item.cargo || "").trim()).filter(Boolean)
     );
 
     if (colaboradoresMetricTotal) colaboradoresMetricTotal.textContent = String(items.length);
-    if (colaboradoresMetricSetores) colaboradoresMetricSetores.textContent = String(setores.size);
+    if (colaboradoresMetricDepartamentos) {
+      colaboradoresMetricDepartamentos.textContent = String(departamentosUnicos.size);
+    }
     if (colaboradoresMetricCargos) colaboradoresMetricCargos.textContent = String(cargos.size);
   }
 
@@ -1345,7 +1547,9 @@
 
   function applyColaboradoresFiltersState(state = {}) {
     if (colaboradoresSearch) colaboradoresSearch.value = String(state.busca || "");
-    if (colaboradoresSetorFilter) colaboradoresSetorFilter.value = String(state.setor || "");
+    if (colaboradoresDepartamentoFilter) {
+      colaboradoresDepartamentoFilter.value = String(state.departamento || "").trim();
+    }
     if (colaboradoresCargoFilter) colaboradoresCargoFilter.value = String(state.cargo || "");
     colaboradoresCurrentPage = parseUrlPageNumber(state.page, 1);
   }
@@ -1372,7 +1576,7 @@
   function resetColaboradoresFiltersState() {
     applyColaboradoresFiltersState({
       busca: "",
-      setor: "",
+      departamento: "",
       cargo: "",
       page: 1,
     });
@@ -1406,9 +1610,10 @@
         busca:
           params.get("col_busca") ||
           (view === "colaboradores" ? params.get("busca") || "" : ""),
-        setor:
+        departamento:
+          params.get("col_departamento") ||
           params.get("col_setor") ||
-          (view === "colaboradores" ? params.get("setor") || "" : ""),
+          (view === "colaboradores" ? params.get("departamento") || params.get("setor") || "" : ""),
         cargo:
           params.get("col_cargo") ||
           (view === "colaboradores" ? params.get("cargo") || "" : ""),
@@ -1460,13 +1665,13 @@
 
     const colState = {
       busca: String(colaboradoresSearch?.value || "").trim(),
-      setor: String(colaboradoresSetorFilter?.value || "").trim(),
+      departamento: String(colaboradoresDepartamentoFilter?.value || "").trim(),
       cargo: String(colaboradoresCargoFilter?.value || "").trim(),
       page: colaboradoresCurrentPage,
     };
 
     if (colState.busca) params.set("col_busca", colState.busca);
-    if (colState.setor) params.set("col_setor", colState.setor);
+    if (colState.departamento) params.set("col_departamento", colState.departamento);
     if (colState.cargo) params.set("col_cargo", colState.cargo);
     if (parseUrlPageNumber(colState.page, 1) > 1) params.set("col_page", String(colState.page));
 
@@ -1500,7 +1705,7 @@
 
     if (view === "colaboradores") {
       if (colState.busca) params.set("busca", colState.busca);
-      if (colState.setor) params.set("setor", colState.setor);
+      if (colState.departamento) params.set("departamento", colState.departamento);
       if (colState.cargo) params.set("cargo", colState.cargo);
       if (parseUrlPageNumber(colState.page, 1) > 1) params.set("page", String(colState.page));
     }
@@ -1558,11 +1763,11 @@
     params.set("limit", String(colaboradoresPageSize));
 
     const q = String(colaboradoresSearch?.value || "").trim();
-    const setor = String(colaboradoresSetorFilter?.value || "").trim();
+    const departamento = String(colaboradoresDepartamentoFilter?.value || "").trim();
     const cargo = String(colaboradoresCargoFilter?.value || "").trim();
 
     if (q) params.set("q", q);
-    if (setor) params.set("setor", setor);
+    if (departamento) params.set("departamento", departamento);
     if (cargo) params.set("cargo", cargo);
 
     return params.toString();
@@ -1634,7 +1839,7 @@
       const hasFilters = countEquipamentosActiveFilters() > 0;
       renderEmptyRow(
         equipamentosTbody,
-        5,
+        7,
         hasFilters ? "Nenhum resultado encontrado" : "Nenhum equipamento encontrado",
         hasFilters
           ? "Nenhum resultado encontrado para os filtros aplicados."
@@ -1642,13 +1847,20 @@
       );
       return;
     }
+    const canManage = canManageCriticalData();
     for (const r of rows || []) {
       const isEmUso = String(r.status || "").trim().toLowerCase() === "em uso";
       const isInativo = String(r.situacao || "ativo").trim().toLowerCase() === "inativo";
-      const editDisabledAttr = isInativo ? 'disabled title="Equipamentos inativos não podem ser editados"' : "";
+      const editDisabledAttr = !canManage
+        ? 'disabled title="Permissão insuficiente"'
+        : isInativo
+          ? 'disabled title="Equipamentos inativos não podem ser editados"'
+          : "";
       const inativarDisabledAttr = isEmUso
         ? 'disabled title="Devolva o equipamento antes de inativar"'
-        : isInativo
+        : !canManage
+          ? 'disabled title="Permissão insuficiente"'
+          : isInativo
           ? 'disabled title="Equipamento já está inativo"'
           : "";
       const tr = document.createElement("tr");
@@ -1660,6 +1872,17 @@
               <div class="saas-cell-title">${escapeHtml(r.nome)}</div>
               <div class="table-subtext">ID interno #${escapeHtml(r.id)}</div>
             </div>
+          </div>
+        </td>
+        <td>
+          <div class="saas-table-stack">
+            <span class="saas-code code">${escapeHtml(r.serial || "—")}</span>
+            <span class="table-subtext">Serial único</span>
+          </div>
+        </td>
+        <td>
+          <div class="saas-table-stack">
+            <span class="badge light badge-brand">${escapeHtml(r.modelo || "—")}</span>
           </div>
         </td>
         <td>
@@ -1789,6 +2012,95 @@
     renderAtribuicoes(rows);
   }
 
+  function renderUsuarios(rows) {
+    if (!usuariosTbody) return;
+    usuariosTbody.innerHTML = "";
+    if (!rows || !rows.length) {
+      renderEmptyRow(
+        usuariosTbody,
+        4,
+        "Nenhum usuário encontrado",
+        "Não há usuários disponíveis para gerenciamento no momento."
+      );
+      return;
+    }
+
+    let currentUserId = 0;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(USER_KEY));
+      currentUserId = Number(parsed?.id || 0);
+    } catch {
+      currentUserId = 0;
+    }
+    const isAdminSession = isAdminUser();
+
+    for (const u of rows) {
+      const perfil = String(u.perfil || "").trim().toLowerCase();
+      const isAdmin = perfil === "admin";
+      const isSelf = Number(u.id) === Number(currentUserId) && currentUserId > 0;
+      const nextPerfil = isAdmin ? "operador" : "admin";
+      const actionLabel = isAdmin ? "Remover admin" : "Tornar admin";
+      const actionClass = isAdmin ? "saas-btn-danger" : "primary";
+      const shouldHideAction = isSelf || !isAdminSession;
+      const disabledAttr = shouldHideAction ? 'disabled aria-disabled="true"' : "";
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><div class="saas-cell-title">${escapeHtml(u.nome || "—")}</div></td>
+        <td><span class="saas-code">${escapeHtml(u.usuario || "—")}</span></td>
+        <td>${perfilBadge(u.perfil)}</td>
+        <td>
+          <div class="saas-table-actions">
+            ${
+              shouldHideAction
+                ? actionStateBadge(isSelf ? "self" : "")
+                : `<button
+                    class="saas-btn saas-btn-sm saas-btn-action ${actionClass}"
+                    type="button"
+                    data-action="toggle-user-perfil"
+                    data-user-id="${escapeHtml(u.id)}"
+                    data-next-perfil="${escapeHtml(nextPerfil)}"
+                    data-user-nome="${escapeHtml(u.nome || u.usuario || "usuário")}"
+                    ${disabledAttr}
+                  >
+                    ${escapeHtml(actionLabel)}
+                  </button>`
+            }
+          </div>
+        </td>
+      `;
+      usuariosTbody.appendChild(tr);
+    }
+  }
+
+  async function loadUsuarios() {
+    showMsg("");
+    if (!usuariosTbody) return;
+    if (!canManageUsers()) {
+      renderEmptyRow(
+        usuariosTbody,
+        4,
+        "Acesso restrito",
+        "Somente administradores podem gerenciar usuários."
+      );
+      return;
+    }
+
+    renderLoadingRow(usuariosTbody, 4, "Carregando usuários...");
+    try {
+      const users = await request("/usuarios");
+      renderUsuarios(Array.isArray(users) ? users : []);
+    } catch (err) {
+      renderEmptyRow(
+        usuariosTbody,
+        4,
+        "Não foi possível carregar",
+        "Os usuários não puderam ser consultados agora. Tente novamente em instantes."
+      );
+      showMsg(err.message || "Falha ao carregar usuários");
+    }
+  }
+
   async function loadColaboradores() {
     showMsg("");
     renderLoadingRow(colaboradoresTbody, 3, "Carregando colaboradores...");
@@ -1803,8 +2115,13 @@
         page: 1,
         totalPages: 1,
       };
-      populateColaboradoresFilterOptions(metrics);
+      await refreshColaboradoresFilterDropdowns(metrics);
       updateColaboradoresMetrics(metrics);
+      await loadDepartamentos({ preserveSelection: true });
+      const depColab = departamentoSelect?.value
+        ? Number(departamentoSelect.value)
+        : null;
+      await loadCargosForDepartamento(depColab, { preserveSelection: true });
       colaboradoresCache = items;
       colaboradoresCurrentPage = Number(pagination.page || 1);
       colaboradoresTotalPages = Number(pagination.totalPages || 1);
@@ -1866,7 +2183,7 @@
 
   async function loadEquipamentos() {
     showMsg("");
-    renderLoadingRow(equipamentosTbody, 5, "Carregando equipamentos...");
+    renderLoadingRow(equipamentosTbody, 7, "Carregando equipamentos...");
     try {
       const [metricsRows, paginated] = await Promise.all([
         request("/equipamentos"),
@@ -1891,7 +2208,7 @@
     } catch (err) {
       renderEmptyRow(
         equipamentosTbody,
-        5,
+        7,
         "Não foi possível carregar",
         "Verifique a conexão com o servidor e tente novamente."
       );
@@ -1907,6 +2224,125 @@
       );
       showMsg(err.message || "Falha ao carregar equipamentos");
       throw err;
+    }
+  }
+
+  function syncAtribEquipamentoUI() {
+    if (!atribEquipamento || !atribEquipamentoList) return;
+    const selected = Array.from(atribEquipamento.selectedOptions || []);
+    atribEquipamentoList.querySelectorAll(".atrib-equip-row").forEach((row) => {
+      const id = String(row.dataset.equipId || "");
+      const cb = row.querySelector(".atrib-equip-checkbox");
+      const isOn = selected.some((o) => String(o.value) === id);
+      if (cb) cb.checked = isOn;
+      row.classList.toggle("is-selected", isOn);
+    });
+
+    if (atribEquipamentoTags) {
+      atribEquipamentoTags.innerHTML = "";
+      selected.forEach((opt) => {
+        const name = String(opt.textContent || "").trim();
+        const id = String(opt.value);
+        const tag = document.createElement("span");
+        tag.className = "atrib-equip-tag";
+        const textSpan = document.createElement("span");
+        textSpan.className = "atrib-equip-tag-text";
+        textSpan.textContent = name;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "atrib-equip-tag-remove";
+        btn.dataset.removeEquip = id;
+        btn.setAttribute("aria-label", `Remover ${name}`);
+        btn.textContent = "×";
+        tag.appendChild(textSpan);
+        tag.appendChild(btn);
+        atribEquipamentoTags.appendChild(tag);
+      });
+    }
+
+    const selectedCount = selected.length;
+    const rowCount = atribEquipamentoList.querySelectorAll(".atrib-equip-row").length;
+    if (atribEquipamentoSelectedWrap) {
+      atribEquipamentoSelectedWrap.hidden = selectedCount === 0;
+    }
+    if (atribEquipamentoPlaceholder) {
+      if (rowCount === 0) {
+        atribEquipamentoPlaceholder.hidden = false;
+        atribEquipamentoPlaceholder.textContent = "Nenhum equipamento disponível no momento.";
+      } else if (selectedCount === 0) {
+        atribEquipamentoPlaceholder.hidden = false;
+        atribEquipamentoPlaceholder.textContent = "Selecione um ou mais equipamentos";
+      } else {
+        atribEquipamentoPlaceholder.hidden = true;
+      }
+    }
+    if (atribEquipamentoPicker) {
+      atribEquipamentoPicker.classList.toggle("has-selection", selectedCount > 0);
+    }
+  }
+
+  function renderAtribEquipamentoChecklist(eqRows) {
+    if (!atribEquipamento || !atribEquipamentoList) return;
+    atribEquipamento.innerHTML = "";
+    atribEquipamentoList.innerHTML = "";
+    const disponiveis = (eqRows || []).filter((x) => x.status === "disponivel");
+    for (const e of disponiveis) {
+      const opt = document.createElement("option");
+      opt.value = String(e.id);
+      opt.textContent = `${e.nome} (${e.codigo_barras})`;
+      atribEquipamento.appendChild(opt);
+
+      const row = document.createElement("label");
+      row.className = "atrib-equip-row";
+      row.dataset.equipId = String(e.id);
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "atrib-equip-checkbox";
+      cb.dataset.equipId = String(e.id);
+      const body = document.createElement("span");
+      body.className = "atrib-equip-row-body";
+      const nameEl = document.createElement("span");
+      nameEl.className = "atrib-equip-row-name";
+      nameEl.textContent = String(e.nome || "");
+      const codeEl = document.createElement("span");
+      codeEl.className = "atrib-equip-row-code";
+      codeEl.textContent = String(e.codigo_barras || "");
+      body.appendChild(nameEl);
+      body.appendChild(codeEl);
+      row.appendChild(cb);
+      row.appendChild(body);
+      atribEquipamentoList.appendChild(row);
+    }
+    syncAtribEquipamentoUI();
+  }
+
+  function initAtribEquipamentoPicker() {
+    if (!atribEquipamentoList || atribEquipamentoList.dataset.bound === "1") return;
+    atribEquipamentoList.dataset.bound = "1";
+    atribEquipamentoList.addEventListener("change", (e) => {
+      const cb = e.target.closest(".atrib-equip-checkbox");
+      if (!cb || !atribEquipamento) return;
+      const id = String(cb.dataset.equipId);
+      const opt = Array.from(atribEquipamento.options).find((o) => String(o.value) === id);
+      if (opt) opt.selected = cb.checked;
+      atribEquipamento.dispatchEvent(new Event("change", { bubbles: true }));
+      atribEquipamento.dataset.touched = "true";
+      syncAtribEquipamentoUI();
+      validateField(atribEquipamento);
+    });
+    if (atribEquipamentoTags) {
+      atribEquipamentoTags.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-remove-equip]");
+        if (!btn || !atribEquipamento) return;
+        e.preventDefault();
+        const id = String(btn.dataset.removeEquip);
+        const opt = Array.from(atribEquipamento.options).find((o) => String(o.value) === id);
+        if (opt) opt.selected = false;
+        atribEquipamento.dispatchEvent(new Event("change", { bubbles: true }));
+        atribEquipamento.dataset.touched = "true";
+        syncAtribEquipamentoUI();
+        validateField(atribEquipamento);
+      });
     }
   }
 
@@ -1941,13 +2377,7 @@
         atribColaborador.appendChild(opt);
       }
 
-      atribEquipamento.innerHTML = '<option value="">Selecione o equipamento</option>';
-      for (const e of (eqRows || []).filter((x) => x.status === "disponivel")) {
-        const opt = document.createElement("option");
-        opt.value = e.id;
-        opt.textContent = `${e.nome} (${e.codigo_barras})`;
-        atribEquipamento.appendChild(opt);
-      }
+      renderAtribEquipamentoChecklist(eqRows);
 
       validateField(atribColaborador);
       validateField(atribEquipamento);
@@ -1967,6 +2397,7 @@
       );
       updateAtribuicoesMetrics([], []);
       atribuicoesResultsTotal = 0;
+      renderAtribEquipamentoChecklist([]);
       updateFilterSummary();
       updateServerPaginationState(
         1,
@@ -1999,7 +2430,7 @@
     } catch (err) {
       renderEmptyRow(
         equipamentosTbody,
-        5,
+        7,
         "Não foi possível carregar",
         "Os equipamentos não puderam ser filtrados agora. Tente novamente em instantes."
       );
@@ -2114,7 +2545,7 @@
         title: "Sessão encerrada",
         message: "Logout realizado com sucesso.",
       });
-      window.location.href = "login.html";
+      window.location.href = "/login.html";
     };
 
     if (!token) {
@@ -2224,7 +2655,7 @@
     updateFilterSummary();
     scheduleRefresh("colaboradores", () => loadColaboradoresListPage(1));
   });
-  colaboradoresSetorFilter?.addEventListener("change", () => {
+  colaboradoresDepartamentoFilter?.addEventListener("change", () => {
     colaboradoresCurrentPage = 1;
     updateFilterSummary();
     loadColaboradoresListPage(1);
@@ -2265,11 +2696,19 @@
     await loadAtribuicoesListPage(atribuicoesCurrentPage + 1, "next");
   });
   colaboradorNewBtn?.addEventListener("click", () => {
+    if (!canManageCriticalData()) {
+      showMsg("Você não tem permissão para cadastrar colaboradores.", "warning");
+      return;
+    }
     const shouldOpen = colaboradorFormPanel?.hidden ?? true;
     setColaboradorFormOpen(shouldOpen);
     if (shouldOpen) focusFirstField(colaboradorForm);
   });
   equipamentoNewBtn?.addEventListener("click", () => {
+    if (!canManageCriticalData()) {
+      showMsg("Você não tem permissão para cadastrar equipamentos.", "warning");
+      return;
+    }
     const shouldOpen = equipamentoFormPanel?.hidden ?? true;
     if (shouldOpen) {
       startEquipamentoCreate();
@@ -2283,9 +2722,37 @@
     if (shouldOpen) focusFirstField(atribuirForm);
   });
 
+  departamentoSelect?.addEventListener("change", () => {
+    const depId = departamentoSelect.value ? Number(departamentoSelect.value) : null;
+    void loadCargosForDepartamento(depId, { preserveSelection: false });
+    const canManage = canManageCriticalData();
+    if (cargoAddBtn) {
+      cargoAddBtn.disabled =
+        !canManage || !depId || !Number.isInteger(depId) || depId <= 0;
+    }
+  });
+
   colaboradorForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     showMsg("");
+    if (!canManageCriticalData()) {
+      showMsg("Você não tem permissão para cadastrar colaboradores.", "warning");
+      return;
+    }
+    const depEl = document.getElementById("departamento");
+    const cargoEl = document.getElementById("cargo");
+    const depNum = Number(depEl?.value);
+    const cargoNum = Number(cargoEl?.value);
+    if (!depEl || !Number.isInteger(depNum) || depNum <= 0) {
+      showMsg("Selecione um departamento", "warning");
+      validateField(depEl, { forceTouch: true });
+      return;
+    }
+    if (!cargoEl || cargoEl.disabled || !Number.isInteger(cargoNum) || cargoNum <= 0) {
+      showMsg("Selecione um cargo", "warning");
+      validateField(cargoEl, { forceTouch: true });
+      return;
+    }
     if (!validateForm(colaboradorForm)) {
       showMsg("Revise os campos destacados antes de continuar.", "warning");
       return;
@@ -2294,8 +2761,8 @@
     const payload = {
       nome: normalizeTextCase(document.getElementById("nome").value.trim()),
       cpf: document.getElementById("cpf").value.trim(),
-      cargo: normalizeTextCase(document.getElementById("cargo").value.trim()),
-      setor: normalizeTextCase(document.getElementById("setor").value.trim()),
+      cargo_id: cargoNum,
+      departamento_id: depNum,
     };
     try {
       setButtonLoading(submitBtn, true, "Salvando...");
@@ -2304,6 +2771,7 @@
       showMsg("Colaborador cadastrado com sucesso.", "success");
       colaboradorForm.reset();
       resetFormState(colaboradorForm);
+      await loadCargosForDepartamento(null);
       setColaboradorFormOpen(false);
       resetColaboradoresFiltersState();
       await loadColaboradores();
@@ -2316,9 +2784,88 @@
     }
   });
 
+  cargoAddBtn?.addEventListener("click", async () => {
+    if (!canManageCriticalData()) {
+      showMsg("Você não tem permissão para cadastrar cargos.", "warning");
+      return;
+    }
+    const depId = Number(departamentoSelect?.value);
+    if (!Number.isInteger(depId) || depId <= 0) {
+      showMsg("Selecione um departamento", "warning");
+      validateField(departamentoSelect, { forceTouch: true });
+      return;
+    }
+    const nome = String(cargoNovoInput?.value || "").trim();
+    if (!nome) {
+      showMsg("Informe o nome do cargo para adicionar.", "warning");
+      return;
+    }
+    showMsg("");
+    try {
+      setButtonLoading(cargoAddBtn, true, "Adicionando...");
+      const created = await request("/cargos", {
+        method: "POST",
+        body: { nome: normalizeTextCase(nome), departamento_id: depId },
+      });
+      if (cargoNovoInput) cargoNovoInput.value = "";
+      await loadCargosForDepartamento(depId, {
+        preserveSelection: false,
+        selectId: created?.id ?? null,
+      });
+      validateField(cargoSelect, { forceTouch: true });
+      showMsg("Cargo cadastrado com sucesso.", "success");
+    } catch (err) {
+      showMsg(err.message || "Falha ao cadastrar cargo");
+    } finally {
+      setButtonLoading(cargoAddBtn, false);
+    }
+  });
+
+  departamentoAddBtn?.addEventListener("click", async () => {
+    if (!canManageCriticalData()) {
+      showMsg("Você não tem permissão para cadastrar departamentos.", "warning");
+      return;
+    }
+    const nome = String(departamentoNovoInput?.value || "").trim();
+    if (!nome) {
+      showMsg("Informe o nome do departamento para adicionar.", "warning");
+      return;
+    }
+    showMsg("");
+    try {
+      setButtonLoading(departamentoAddBtn, true, "Adicionando...");
+      const created = await request("/departamentos", {
+        method: "POST",
+        body: { nome: normalizeTextCase(nome) },
+      });
+      if (departamentoNovoInput) departamentoNovoInput.value = "";
+      const newId = created?.id ?? null;
+      await loadDepartamentos({
+        preserveSelection: false,
+        selectId: newId,
+      });
+      if (newId != null) {
+        await loadCargosForDepartamento(Number(newId), {
+          preserveSelection: false,
+          selectId: null,
+        });
+      }
+      validateField(departamentoSelect, { forceTouch: true });
+      showMsg("Departamento criado com sucesso", "success");
+    } catch (err) {
+      showMsg(err.message || "Falha ao cadastrar departamento");
+    } finally {
+      setButtonLoading(departamentoAddBtn, false);
+    }
+  });
+
   equipamentoForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     showMsg("");
+    if (!canManageCriticalData()) {
+      showMsg("Você não tem permissão para cadastrar/editar equipamentos.", "warning");
+      return;
+    }
     if (!validateForm(equipamentoForm)) {
       showMsg("Revise os campos destacados antes de continuar.", "warning");
       return;
@@ -2328,7 +2875,10 @@
     const isEditing = Number.isInteger(equipamentoId) && equipamentoId > 0;
     const payload = {
       nome: normalizeTextCase(document.getElementById("eq_nome").value.trim()),
+      serial: String(document.getElementById("eq_serial").value || "").trim(),
+      modelo: normalizeTextCase(document.getElementById("eq_modelo").value.trim()),
       marca: normalizeTextCase(document.getElementById("eq_marca").value.trim()),
+      observacoes: String(document.getElementById("eq_observacoes").value || "").trim(),
       status: document.getElementById("eq_status").value,
     };
     try {
@@ -2365,15 +2915,22 @@
       return;
     }
     const submitBtn = e.submitter || atribuirForm.querySelector("button[type='submit']");
+    const equipamentoIds = Array.from(atribEquipamento.selectedOptions || [])
+      .map((opt) => Number(opt.value))
+      .filter((id) => Number.isInteger(id) && id > 0);
     const payload = {
       colaborador_id: Number(atribColaborador.value),
-      equipamento_id: Number(atribEquipamento.value),
+      equipamento_ids: equipamentoIds,
     };
     try {
       setButtonLoading(submitBtn, true, "Atribuindo...");
       const created = await request("/atribuir", { method: "POST", body: payload });
-      pendingRowHighlight.atribuicoes = created?.id ?? null;
-      showMsg("Atribuição realizada com sucesso.", "success");
+      pendingRowHighlight.atribuicoes = created?.id ?? created?.items?.[0]?.id ?? null;
+      const count = Array.isArray(created?.items) ? created.items.length : 1;
+      showMsg(
+        count > 1 ? `Atribuição realizada com sucesso para ${count} equipamentos.` : "Atribuição realizada com sucesso.",
+        "success"
+      );
       atribuirForm.reset();
       resetFormState(atribuirForm);
       setAtribuicaoFormOpen(false);
@@ -2394,6 +2951,10 @@
   equipamentosTbody?.addEventListener("click", async (e) => {
     const editBtn = e.target.closest("[data-action='editar-equipamento']");
     if (editBtn) {
+      if (!canManageCriticalData()) {
+        showMsg("Você não tem permissão para editar equipamentos.", "warning");
+        return;
+      }
       const equipamentoId = Number(editBtn.dataset.equipamentoId);
       const equipamento = (equipamentosCache || []).find(
         (item) => Number(item.id) === equipamentoId
@@ -2411,14 +2972,21 @@
 
     const inativarBtn = e.target.closest("[data-action='inativar-equipamento']");
     if (!inativarBtn || inativarBtn.disabled) return;
+    if (!canManageCriticalData()) {
+      showMsg("Você não tem permissão para inativar equipamentos.", "warning");
+      return;
+    }
 
     const equipamentoId = Number(inativarBtn.dataset.equipamentoId);
     if (!equipamentoId) return;
 
     const equipamentoNome = String(inativarBtn.dataset.equipamentoNome || "este equipamento");
-    const confirmed = window.confirm(
-      `Confirmar inativação de "${equipamentoNome}"? O item será removido da lista principal, sem perder o histórico.`
-    );
+    const confirmed = await showConfirmModal({
+      title: "Inativar equipamento",
+      message: `Confirmar inativação de "${equipamentoNome}"? O item será removido da lista principal, sem perder o histórico.`,
+      confirmText: "Inativar",
+      cancelText: "Cancelar",
+    });
     if (!confirmed) return;
 
     showMsg("");
@@ -2449,9 +3017,12 @@
     const colaboradorNome = String(btn.dataset.colaboradorNome || "este colaborador");
     const equipamentoNome = String(btn.dataset.equipamentoNome || "este equipamento");
 
-    const confirmed = window.confirm(
-      `Confirmar devolução de "${equipamentoNome}" vinculado a ${colaboradorNome}?`
-    );
+    const confirmed = await showConfirmModal({
+      title: "Devolver equipamento",
+      message: `Confirmar devolução de "${equipamentoNome}" vinculado a ${colaboradorNome}?`,
+      confirmText: "Devolver",
+      cancelText: "Cancelar",
+    });
     if (!confirmed) return;
 
     showMsg("");
@@ -2463,6 +3034,40 @@
       await refreshStatsAndActivities();
     } catch (err) {
       showMsg(err.message || "Falha ao devolver equipamento");
+      setButtonLoading(btn, false);
+    }
+  });
+
+  usuariosTbody?.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-action='toggle-user-perfil']");
+    if (!btn || btn.disabled) return;
+    if (!canManageUsers()) {
+      showMsg("Acesso restrito a administradores.", "warning");
+      return;
+    }
+    const userId = Number(btn.dataset.userId);
+    const nextPerfil = String(btn.dataset.nextPerfil || "").trim();
+    const userNome = String(btn.dataset.userNome || "este usuário");
+    if (!userId || !nextPerfil) return;
+
+    const confirmed = await showConfirmModal({
+      title: "Alterar perfil",
+      message: `Tem certeza que deseja alterar o perfil de "${userNome}" para ${
+        nextPerfil === "admin" ? "Administrador" : "Operador"
+      }?`,
+      confirmText: "Alterar",
+      cancelText: "Cancelar",
+    });
+    if (!confirmed) return;
+
+    showMsg("");
+    try {
+      setButtonLoading(btn, true, "Atualizando...");
+      await request(`/usuarios/${userId}/perfil`, { method: "PATCH", body: { perfil: nextPerfil } });
+      showMsg("Perfil atualizado com sucesso.", "success");
+      await loadUsuarios();
+    } catch (err) {
+      showMsg(err.message || "Falha ao atualizar perfil");
       setButtonLoading(btn, false);
     }
   });
@@ -2483,7 +3088,14 @@
     window.appToast?.consumePendingToast?.();
     loadUserInfo();
     setupFormValidation();
+    initAtribEquipamentoPicker();
     formatDatePill();
+    await loadDepartamentos({ preserveSelection: false });
+    const initDep = departamentoSelect?.value
+      ? Number(departamentoSelect.value)
+      : null;
+    await loadCargosForDepartamento(initDep, { preserveSelection: false });
+    applyAdminVisibility();
     const state = hydrateStateFromUrl();
     showPage(state.view, { syncUrl: false, replaceHistory: true });
   });

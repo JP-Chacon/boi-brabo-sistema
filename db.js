@@ -2,8 +2,21 @@ const path = require("path");
 const sqlite3 = require("sqlite3");
 const bcrypt = require("bcryptjs");
 
-// Mesmo arquivo do workspace; será criado automaticamente.
-const DB_PATH = path.join(__dirname, "controle_colaboradores.sqlite");
+function resolveDbPath() {
+  if (process.env.SQLITE_DB_PATH && String(process.env.SQLITE_DB_PATH).trim()) {
+    return String(process.env.SQLITE_DB_PATH).trim();
+  }
+
+  // Render: use um disco persistente quando configurado.
+  if (process.env.RENDER_DISK_PATH && String(process.env.RENDER_DISK_PATH).trim()) {
+    return path.join(String(process.env.RENDER_DISK_PATH).trim(), "controle_colaboradores.sqlite");
+  }
+
+  // Default: mesmo arquivo do projeto (dev local).
+  return path.join(__dirname, "controle_colaboradores.sqlite");
+}
+
+const DB_PATH = resolveDbPath();
 
 let db;
 
@@ -44,6 +57,51 @@ async function columnExists(tableName, columnName) {
   return columns.some((column) => column.name === columnName);
 }
 
+async function migrateCargosDepartamentoSchema() {
+  const master = await get(`SELECT sql FROM sqlite_master WHERE type='table' AND name='cargos'`);
+  const ddl = String(master?.sql || "");
+
+  if (!(await columnExists("cargos", "departamento_id"))) {
+    await run(`ALTER TABLE cargos ADD COLUMN departamento_id INTEGER REFERENCES departamentos(id)`);
+  }
+
+  if (ddl.includes("UNIQUE") && ddl.toLowerCase().includes("nome")) {
+    await run("BEGIN IMMEDIATE");
+    try {
+      await run(`
+        CREATE TABLE cargos_mig (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nome TEXT NOT NULL,
+          departamento_id INTEGER,
+          FOREIGN KEY (departamento_id) REFERENCES departamentos(id)
+        )
+      `);
+      await run(
+        `
+          INSERT INTO cargos_mig (id, nome, departamento_id)
+          SELECT id, nome, departamento_id FROM cargos
+        `
+      );
+      await run(`DROP TABLE cargos`);
+      await run(`ALTER TABLE cargos_mig RENAME TO cargos`);
+      await run("COMMIT");
+    } catch (err) {
+      try {
+        await run("ROLLBACK");
+      } catch (_) {
+        // ignore
+      }
+      throw err;
+    }
+  }
+
+  await run(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_cargos_departamento_nome
+    ON cargos (departamento_id, nome)
+    WHERE departamento_id IS NOT NULL
+  `);
+}
+
 async function seedDefaultAdminUser() {
   const row = await get(`SELECT COUNT(*) AS total FROM usuarios`);
   if (Number(row?.total || 0) > 0) return;
@@ -70,6 +128,26 @@ async function initDb() {
   // Ativa constraints (FK, UNIQUE etc).
   await run("PRAGMA foreign_keys = ON");
 
+  // Departamentos (antes de cargos — FK)
+  await run(`
+    CREATE TABLE IF NOT EXISTS departamentos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL UNIQUE
+    );
+  `);
+
+  // Cargos (novos installs: sem UNIQUE global em nome)
+  await run(`
+    CREATE TABLE IF NOT EXISTS cargos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      departamento_id INTEGER,
+      FOREIGN KEY (departamento_id) REFERENCES departamentos(id)
+    );
+  `);
+
+  await migrateCargosDepartamentoSchema();
+
   // Colaboradores
   await run(`
     CREATE TABLE IF NOT EXISTS colaboradores (
@@ -80,6 +158,14 @@ async function initDb() {
       setor TEXT NOT NULL
     );
   `);
+
+  if (!(await columnExists("colaboradores", "cargo_id"))) {
+    await run(`ALTER TABLE colaboradores ADD COLUMN cargo_id INTEGER`);
+  }
+
+  if (!(await columnExists("colaboradores", "departamento_id"))) {
+    await run(`ALTER TABLE colaboradores ADD COLUMN departamento_id INTEGER`);
+  }
 
   // Equipamentos
   await run(`
@@ -96,6 +182,24 @@ async function initDb() {
   if (!(await columnExists("equipamentos", "situacao"))) {
     await run(`ALTER TABLE equipamentos ADD COLUMN situacao TEXT NOT NULL DEFAULT 'ativo'`);
   }
+
+  if (!(await columnExists("equipamentos", "serial"))) {
+    await run(`ALTER TABLE equipamentos ADD COLUMN serial TEXT`);
+  }
+
+  if (!(await columnExists("equipamentos", "modelo"))) {
+    await run(`ALTER TABLE equipamentos ADD COLUMN modelo TEXT`);
+  }
+
+  if (!(await columnExists("equipamentos", "observacoes"))) {
+    await run(`ALTER TABLE equipamentos ADD COLUMN observacoes TEXT`);
+  }
+
+  await run(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_equipamentos_serial_unique
+    ON equipamentos (serial)
+    WHERE serial IS NOT NULL AND TRIM(serial) <> ''
+  `);
 
   await run(`
     CREATE TABLE IF NOT EXISTS usuarios (

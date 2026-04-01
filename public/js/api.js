@@ -102,10 +102,10 @@
     return await request(query ? `/colaboradores?${query}` : "/colaboradores", { method: "GET" });
   }
 
-  async function criarColaborador({ nome, cpf, cargo, setor }) {
+  async function criarColaborador({ nome, cpf, cargo_id, departamento_id }) {
     return await request("/colaboradores", {
       method: "POST",
-      body: { nome, cpf, cargo, setor },
+      body: { nome, cpf, cargo_id, departamento_id },
     });
   }
 

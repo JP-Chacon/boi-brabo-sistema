@@ -94,6 +94,18 @@
             </span>
             Atribuições
           </button>
+
+          <button class="saas-nav-item" data-page="usuarios" type="button" id="menu-usuarios" data-admin-only hidden>
+            <span class="saas-nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M19 8v6"></path>
+                <path d="M22 11h-6"></path>
+              </svg>
+            </span>
+            Usuários
+          </button>
         </nav>
 
         <div class="saas-user">
@@ -360,8 +372,8 @@
                     </svg>
                   </div>
                   <div class="saas-insight-meta">
-                    <span>Setores ativos</span>
-                    <strong id="colaboradoresMetricSetores">0</strong>
+                    <span>Departamentos ativos</span>
+                    <strong id="colaboradoresMetricDepartamentos">0</strong>
                     <small>Distribuição da operação</small>
                   </div>
                 </div>
@@ -402,8 +414,8 @@
                   </button>
                 </div>
                 <div class="table-filters">
-                  <select id="colaboradoresSetorFilter" class="table-select">
-                    <option value="">Todos os setores</option>
+                  <select id="colaboradoresDepartamentoFilter" class="table-select">
+                    <option value="">Todos os departamentos</option>
                   </select>
                   <select id="colaboradoresCargoFilter" class="table-select">
                     <option value="">Todos os cargos</option>
@@ -439,13 +451,33 @@
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-field">
-                      <label for="cargo">Cargo <span class="required">*</span></label>
-                      <input id="cargo" placeholder="Ex: Analista de Estoque" required />
+                      <label for="departamento">Departamento <span class="required">*</span></label>
+                      <select id="departamento" required>
+                        <option value="" selected disabled>Selecione o departamento</option>
+                      </select>
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-field">
-                      <label for="setor">Setor <span class="required">*</span></label>
-                      <input id="setor" placeholder="Ex: Logística" required />
+                      <label for="departamentoNovo">Novo departamento</label>
+                      <div class="saas-inline-field">
+                        <input id="departamentoNovo" placeholder="Ex: Logística" />
+                        <button class="saas-btn saas-btn-sm" type="button" id="departamentoAddBtn">Adicionar</button>
+                      </div>
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="cargo">Cargo <span class="required">*</span></label>
+                      <select id="cargo" required disabled>
+                        <option value="" selected disabled>Selecione o departamento primeiro</option>
+                      </select>
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="cargoNovo">Novo cargo</label>
+                      <div class="saas-inline-field">
+                        <input id="cargoNovo" placeholder="Ex: Analista de Estoque" disabled />
+                        <button class="saas-btn saas-btn-sm" type="button" id="cargoAddBtn">Adicionar</button>
+                      </div>
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-actions">
@@ -460,7 +492,7 @@
                       <tr>
                         <th>Colaborador</th>
                         <th>Cargo</th>
-                        <th>Setor</th>
+                        <th>Departamento</th>
                       </tr>
                     </thead>
                     <tbody></tbody>
@@ -583,8 +615,23 @@
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-field">
+                      <label for="eq_serial">Serial <span class="required">*</span></label>
+                      <input id="eq_serial" placeholder="Ex: ZEB1234567" required />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="eq_modelo">Modelo</label>
+                      <input id="eq_modelo" placeholder="Ex: TC21" />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
                       <label for="eq_marca">Marca <span class="required">*</span></label>
                       <input id="eq_marca" placeholder="Ex: Zebra" required />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
+                      <label for="eq_observacoes">Observações</label>
+                      <input id="eq_observacoes" placeholder="Opcional (ex: com capa, com carregador)" />
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-field">
@@ -607,6 +654,8 @@
                     <thead>
                       <tr>
                         <th class="is-main">Equipamento</th>
+                        <th>Serial</th>
+                        <th>Modelo</th>
                         <th class="is-brand">Marca</th>
                         <th class="is-code">Código</th>
                         <th class="is-status">Status</th>
@@ -722,7 +771,7 @@
                 <div class="saas-colab-form-drawer" id="atribuicaoFormPanel" hidden>
                   <div class="saas-drawer-head">
                     <strong>Nova atribuição</strong>
-                    <span>Selecione o responsável e o equipamento disponível para concluir a entrega.</span>
+                    <span>Selecione o responsável e um ou mais equipamentos disponíveis para concluir a entrega.</span>
                   </div>
                   <form id="atribuirForm" class="saas-form-grid one-col" novalidate>
                     <div class="saas-field">
@@ -731,8 +780,34 @@
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-field">
-                      <label for="atrib_equipamento">Equipamento disponível <span class="required">*</span></label>
-                      <select id="atrib_equipamento" required></select>
+                      <span class="atrib-equip-field-label" id="atrib_equipamento_label"
+                        >Equipamentos disponíveis <span class="required">*</span></span
+                      >
+                      <div class="atrib-equip-picker" id="atrib_equipamento_picker">
+                        <div class="atrib-equip-selected" id="atrib_equipamento_selected_wrap" hidden>
+                          <span class="atrib-equip-selected-title">Selecionados</span>
+                          <div class="atrib-equip-tags" id="atrib_equipamento_tags"></div>
+                        </div>
+                        <div class="atrib-equip-list-wrap">
+                          <p class="atrib-equip-placeholder" id="atrib_equipamento_placeholder">
+                            Selecione um ou mais equipamentos
+                          </p>
+                          <div
+                            class="atrib-equip-list"
+                            id="atrib_equipamento_list"
+                            role="group"
+                            aria-labelledby="atrib_equipamento_label"
+                          ></div>
+                        </div>
+                      </div>
+                      <select
+                        id="atrib_equipamento"
+                        class="atrib-equip-hidden-select"
+                        multiple
+                        required
+                        tabindex="-1"
+                        aria-hidden="true"
+                      ></select>
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-actions">
@@ -767,6 +842,34 @@
               </section>
             </div>
           </section>
+
+          <!-- PAGE: Usuários (admin) -->
+          <section class="saas-page" data-page="usuarios" hidden>
+            <div class="saas-colab-page">
+              <section class="saas-panel saas-colab-shell">
+                <div class="saas-panel-head no-border">
+                  <div class="saas-panel-title-group">
+                    <h3>Gerenciamento de usuários</h3>
+                    <p>Controle perfis de acesso. Apenas administradores podem promover ou remover permissões.</p>
+                  </div>
+                </div>
+
+                <div class="saas-table-wrap flush" id="usuariosTableWrap">
+                  <table class="saas-table" id="usuariosTable">
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>Usuário</th>
+                        <th>Perfil</th>
+                        <th class="is-actions">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </section>
         </div>
       </main>
     </div>
@@ -776,6 +879,7 @@
     <script src="./node_modules/dayjs/locale/pt-br.js"></script>
     <script src="./js/toast.js"></script>
     <script src="./js/theme.js"></script>
+    <script src="./js/modal.js"></script>
     <script src="./js/dashboard.js"></script>
   </body>
 </html>

@@ -1,6 +1,7 @@
 const express = require("express");
 const { run, all, get } = require("../db");
 const { registerAuditLog } = require("../utils/audit");
+const { requireAtLeast } = require("../middleware/permissions");
 
 const router = express.Router();
 
@@ -132,7 +133,7 @@ router.get("/", async (req, res) => {
       const total = Number(countRow?.total || 0);
       const items = await all(
         `
-          SELECT id, nome, marca, codigo_barras, ${statusExpression} AS status, situacao
+          SELECT id, nome, marca, codigo_barras, serial, modelo, observacoes, ${statusExpression} AS status, situacao
           FROM equipamentos
           ${whereClause}
           ORDER BY id DESC
@@ -154,7 +155,7 @@ router.get("/", async (req, res) => {
 
     const rows = await all(
       `
-        SELECT id, nome, marca, codigo_barras, ${statusExpression} AS status, situacao
+        SELECT id, nome, marca, codigo_barras, serial, modelo, observacoes, ${statusExpression} AS status, situacao
         FROM equipamentos
         WHERE COALESCE(situacao, 'ativo') = 'ativo'
         ORDER BY id DESC
@@ -167,18 +168,21 @@ router.get("/", async (req, res) => {
 });
 
 // POST /equipamentos
-router.post("/", async (req, res) => {
+router.post("/", requireAtLeast("admin"), async (req, res) => {
   try {
     const usuarioId = Number(req.user?.id);
-    const { nome, marca, status } = req.body || {};
+    const { nome, marca, status, serial, modelo, observacoes } = req.body || {};
     const normalizedStatus = normalizeStatus(status);
+    const safeSerial = String(serial || "").trim();
+    const safeModelo = String(modelo || "").trim();
+    const safeObs = observacoes == null ? null : String(observacoes || "").trim();
 
-    if (!nome || !marca || !normalizedStatus) {
+    if (!nome || !marca || !normalizedStatus || !safeSerial) {
       return res
         .status(400)
         .json({
           error:
-            "Campos obrigatórios: nome, marca e status (Disponível ou Em uso)",
+            "Campos obrigatórios: nome, marca, serial e status (Disponível ou Em uso)",
         });
     }
 
@@ -193,10 +197,10 @@ router.post("/", async (req, res) => {
 
     const result = await run(
       `
-        INSERT INTO equipamentos (nome, marca, codigo_barras, status, situacao)
-        VALUES (?, ?, ?, ?, 'ativo')
+        INSERT INTO equipamentos (nome, marca, codigo_barras, serial, modelo, observacoes, status, situacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'ativo')
       `,
-      [nome, marca, finalCode, normalizedStatus]
+      [nome, marca, finalCode, safeSerial, safeModelo || null, safeObs, normalizedStatus]
     );
 
     await registerAuditLog({
@@ -217,6 +221,8 @@ router.post("/", async (req, res) => {
       // ignore rollback errors
     }
     if (String(err?.message || "").toLowerCase().includes("unique")) {
+      const lower = String(err?.message || "").toLowerCase();
+      if (lower.includes("serial")) return res.status(409).json({ error: "serial já cadastrado" });
       return res.status(409).json({ error: "codigo_barras já cadastrado" });
     }
     return res.status(500).json({ error: "Erro ao criar equipamento" });
@@ -227,16 +233,19 @@ async function handleUpdateEquipamento(req, res) {
   try {
     const usuarioId = Number(req.user?.id);
     const equipamentoId = Number(req.params.id);
-    const { nome, marca, status } = req.body || {};
+    const { nome, marca, status, serial, modelo, observacoes } = req.body || {};
     const normalizedStatus = normalizeStatus(status);
+    const safeSerial = String(serial || "").trim();
+    const safeModelo = String(modelo || "").trim();
+    const safeObs = observacoes == null ? null : String(observacoes || "").trim();
 
     if (!Number.isInteger(equipamentoId) || equipamentoId <= 0) {
       return res.status(400).json({ error: "Equipamento inválido" });
     }
 
-    if (!nome || !marca || !normalizedStatus) {
+    if (!nome || !marca || !normalizedStatus || !safeSerial) {
       return res.status(400).json({
-        error: "Campos obrigatórios: nome, marca e status",
+        error: "Campos obrigatórios: nome, marca, serial e status",
       });
     }
 
@@ -283,10 +292,15 @@ async function handleUpdateEquipamento(req, res) {
     await run(
       `
         UPDATE equipamentos
-        SET nome = ?, marca = ?, status = ?
+        SET nome = ?,
+            marca = ?,
+            serial = ?,
+            modelo = ?,
+            observacoes = ?,
+            status = ?
         WHERE id = ?
       `,
-      [nome, marca, normalizedStatus, equipamentoId]
+      [nome, marca, safeSerial, safeModelo || null, safeObs, normalizedStatus, equipamentoId]
     );
 
     await registerAuditLog({
@@ -307,6 +321,8 @@ async function handleUpdateEquipamento(req, res) {
       // ignore rollback errors
     }
     if (String(err?.message || "").toLowerCase().includes("unique")) {
+      const lower = String(err?.message || "").toLowerCase();
+      if (lower.includes("serial")) return res.status(409).json({ error: "serial já cadastrado" });
       return res.status(409).json({ error: "codigo_barras já cadastrado" });
     }
     return res.status(500).json({ error: "Erro ao atualizar equipamento" });
@@ -314,13 +330,13 @@ async function handleUpdateEquipamento(req, res) {
 }
 
 // PUT /equipamentos/:id
-router.put("/:id", handleUpdateEquipamento);
+router.put("/:id", requireAtLeast("admin"), handleUpdateEquipamento);
 
 // PATCH /equipamentos/:id
-router.patch("/:id", handleUpdateEquipamento);
+router.patch("/:id", requireAtLeast("admin"), handleUpdateEquipamento);
 
 // POST /equipamentos/:id/inativar
-router.post("/:id/inativar", async (req, res) => {
+router.post("/:id/inativar", requireAtLeast("admin"), async (req, res) => {
   try {
     const usuarioId = Number(req.user?.id);
     const equipamentoId = Number(req.params.id);
