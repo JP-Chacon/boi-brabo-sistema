@@ -12,6 +12,8 @@ const authRoutes = require("./routes/auth");
 const cargosRoutes = require("./routes/cargos");
 const departamentosRoutes = require("./routes/departamentos");
 const usuariosRoutes = require("./routes/usuarios");
+const relatoriosRoutes = require("./routes/relatorios");
+const unidadesRoutes = require("./routes/unidades");
 const authMiddlewareFactory = require("./middleware/authMiddleware");
 
 async function main() {
@@ -69,6 +71,23 @@ async function main() {
   app.use("/cargos", authMiddleware, cargosRoutes);
   app.use("/departamentos", authMiddleware, departamentosRoutes);
   app.use("/usuarios", authMiddleware, usuariosRoutes);
+  // GET /unidades explícito (compatível com Express 5) + router para POST/PATCH/DELETE
+  app.get(["/unidades", "/unidades/"], authMiddleware, unidadesRoutes.listUnidades);
+  app.use("/unidades", authMiddleware, unidadesRoutes);
+  app.use("/relatorios", authMiddleware, relatoriosRoutes);
+
+  // Rotas amigáveis para o SPA (evita 404 ao abrir /organizacao ou /dashboard sem .html)
+  app.get(["/organizacao", "/organizacao/"], (req, res) => {
+    const raw = String(req.url.split("?")[1] || "");
+    const params = new URLSearchParams(raw);
+    if (!params.has("view")) params.set("view", "organizacao");
+    res.redirect(302, "/dashboard.html?" + params.toString());
+  });
+  app.get(["/dashboard", "/dashboard/"], (req, res) => {
+    const raw = String(req.url.split("?")[1] || "");
+    const qs = raw ? "?" + raw : "";
+    res.redirect(302, "/dashboard.html" + qs);
+  });
 
   // Arquivos estáticos (após as rotas da API)
   app.use(express.static(path.join(__dirname, "public"), staticOptions));

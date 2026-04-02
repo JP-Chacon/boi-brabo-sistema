@@ -82,4 +82,70 @@ router.post("/", requireAtLeast("admin"), async (req, res) => {
   }
 });
 
+// PATCH /cargos/:id — editar nome (apenas admin)
+router.patch("/:id", requireAtLeast("admin"), async (req, res) => {
+  const targetId = Number(req.params.id);
+  if (!Number.isInteger(targetId) || targetId <= 0) {
+    return res.status(400).json({ error: "Cargo inválido" });
+  }
+
+  const nome = normalizeNome(req.body?.nome);
+  if (!nome) {
+    return res.status(400).json({ error: "Campo obrigatório: nome" });
+  }
+
+  try {
+    const existing = await get(`SELECT id, departamento_id FROM cargos WHERE id = ?`, [targetId]);
+    if (!existing?.id) {
+      return res.status(404).json({ error: "Cargo não encontrado" });
+    }
+
+    const depId = existing.departamento_id != null ? Number(existing.departamento_id) : null;
+    if (!Number.isInteger(depId) || depId <= 0) {
+      return res.status(400).json({ error: "Cargo sem departamento associado" });
+    }
+
+    const dup = await get(
+      `SELECT id FROM cargos WHERE departamento_id = ? AND LOWER(nome) = LOWER(?) AND id <> ?`,
+      [depId, nome, targetId]
+    );
+    if (dup?.id) {
+      return res.status(409).json({ error: "Já existe um cargo com este nome neste departamento" });
+    }
+
+    await run(`UPDATE cargos SET nome = ? WHERE id = ?`, [nome, targetId]);
+    return res.json({ ok: true, id: targetId });
+  } catch (err) {
+    if (String(err?.message || "").toLowerCase().includes("unique")) {
+      return res.status(409).json({ error: "Já existe um cargo com este nome neste departamento" });
+    }
+    return res.status(500).json({ error: "Erro ao atualizar cargo" });
+  }
+});
+
+// DELETE /cargos/:id — excluir (apenas admin; bloqueia se em uso)
+router.delete("/:id", requireAtLeast("admin"), async (req, res) => {
+  const targetId = Number(req.params.id);
+  if (!Number.isInteger(targetId) || targetId <= 0) {
+    return res.status(400).json({ error: "Cargo inválido" });
+  }
+
+  try {
+    const existing = await get(`SELECT id FROM cargos WHERE id = ?`, [targetId]);
+    if (!existing?.id) {
+      return res.status(404).json({ error: "Cargo não encontrado" });
+    }
+
+    const inUse = await get(`SELECT id FROM colaboradores WHERE cargo_id = ? LIMIT 1`, [targetId]);
+    if (inUse?.id) {
+      return res.status(409).json({ error: "Não é possível excluir: cargo está em uso" });
+    }
+
+    await run(`DELETE FROM cargos WHERE id = ?`, [targetId]);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: "Erro ao excluir cargo" });
+  }
+});
+
 module.exports = router;

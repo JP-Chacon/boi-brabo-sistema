@@ -1,8 +1,10 @@
 (() => {
   const API_BASE_URL =
-    window.location.origin && window.location.origin !== "null"
-      ? window.location.origin
-      : "http://localhost:3000";
+    typeof window.resolveApiBaseUrl === "function"
+      ? window.resolveApiBaseUrl()
+      : window.location.origin && window.location.origin !== "null"
+        ? window.location.origin
+        : "http://localhost:3000";
 
   const form = document.getElementById("registerForm");
   const errorBox = document.getElementById("registerError");

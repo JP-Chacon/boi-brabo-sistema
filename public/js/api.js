@@ -1,8 +1,10 @@
 (() => {
   const API_BASE_URL =
-    window.location.origin && window.location.origin !== "null"
-      ? window.location.origin
-      : "http://localhost:3000";
+    typeof window.resolveApiBaseUrl === "function"
+      ? window.resolveApiBaseUrl()
+      : window.location.origin && window.location.origin !== "null"
+        ? window.location.origin
+        : "http://localhost:3000";
   const TOKEN_KEY = "token";
   const TOKEN_EXPIRES_KEY = "token_expires_at";
   const USER_KEY = "user";
@@ -102,10 +104,10 @@
     return await request(query ? `/colaboradores?${query}` : "/colaboradores", { method: "GET" });
   }
 
-  async function criarColaborador({ nome, cpf, cargo_id, departamento_id }) {
+  async function criarColaborador({ nome, documento, cpf, cargo_id, departamento_id }) {
     return await request("/colaboradores", {
       method: "POST",
-      body: { nome, cpf, cargo_id, departamento_id },
+      body: { nome, documento: documento ?? cpf, cargo_id, departamento_id },
     });
   }
 

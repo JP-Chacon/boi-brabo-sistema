@@ -148,6 +148,29 @@ async function initDb() {
 
   await migrateCargosDepartamentoSchema();
 
+  // Unidades (matriz/filial)
+  await run(`
+    CREATE TABLE IF NOT EXISTS unidades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      tipo TEXT NOT NULL CHECK(tipo IN ('matriz','filial')) DEFAULT 'matriz',
+      cidade TEXT DEFAULT '',
+      estado TEXT DEFAULT '',
+      ativo INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+
+  // Unicidade: mesmo nome pode existir em cidade/estado diferentes (case-insensitive)
+  await run(`DROP INDEX IF EXISTS idx_unidades_nome_lower`);
+  await run(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_unidades_nome_cidade_estado_lower
+    ON unidades (
+      LOWER(TRIM(nome)),
+      LOWER(TRIM(COALESCE(cidade, ''))),
+      LOWER(TRIM(COALESCE(estado, '')))
+    )
+  `);
+
   // Colaboradores
   await run(`
     CREATE TABLE IF NOT EXISTS colaboradores (
@@ -155,7 +178,9 @@ async function initDb() {
       nome TEXT NOT NULL,
       cpf TEXT NOT NULL UNIQUE,
       cargo TEXT NOT NULL,
-      setor TEXT NOT NULL
+      setor TEXT NOT NULL,
+      unidade TEXT,
+      unidade_id INTEGER
     );
   `);
 
@@ -165,6 +190,69 @@ async function initDb() {
 
   if (!(await columnExists("colaboradores", "departamento_id"))) {
     await run(`ALTER TABLE colaboradores ADD COLUMN departamento_id INTEGER`);
+  }
+
+  if (!(await columnExists("colaboradores", "unidade"))) {
+    await run(`ALTER TABLE colaboradores ADD COLUMN unidade TEXT`);
+  }
+
+  if (!(await columnExists("colaboradores", "unidade_id"))) {
+    await run(`ALTER TABLE colaboradores ADD COLUMN unidade_id INTEGER`);
+  }
+
+  await run(`
+    CREATE INDEX IF NOT EXISTS idx_colaboradores_unidade_id
+    ON colaboradores (unidade_id)
+  `);
+
+  // Migra valores legados do campo texto "unidade" para "unidade_id"
+  await run(`
+    INSERT OR IGNORE INTO unidades (nome, tipo, cidade, estado, ativo)
+    SELECT DISTINCT
+      TRIM(unidade) AS nome,
+      'matriz' AS tipo,
+      '' AS cidade,
+      '' AS estado,
+      1 AS ativo
+    FROM colaboradores
+    WHERE unidade IS NOT NULL
+      AND TRIM(unidade) <> ''
+  `);
+
+  await run(`
+    UPDATE colaboradores
+    SET unidade_id = (
+      SELECT u.id
+      FROM unidades u
+      WHERE LOWER(u.nome) = LOWER(colaboradores.unidade)
+      LIMIT 1
+    )
+    WHERE unidade IS NOT NULL
+      AND TRIM(unidade) <> ''
+      AND (unidade_id IS NULL)
+  `);
+
+  if (!(await columnExists("colaboradores", "documento"))) {
+    await run(`ALTER TABLE colaboradores ADD COLUMN documento TEXT`);
+    await run(`
+      UPDATE colaboradores
+      SET documento = REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(cpf, '')), '.', ''), '-', ''), '/', ''), ' ', '')
+      WHERE documento IS NULL OR TRIM(COALESCE(documento, '')) = ''
+    `);
+    await run(`
+      UPDATE colaboradores
+      SET cpf = documento
+      WHERE documento IS NOT NULL AND TRIM(documento) != ''
+    `);
+  }
+
+  if (await columnExists("colaboradores", "documento")) {
+    await run(`
+      UPDATE colaboradores
+      SET cpf = documento
+      WHERE documento IS NOT NULL AND TRIM(documento) != ''
+        AND (cpf IS NULL OR cpf != documento)
+    `);
   }
 
   // Equipamentos
@@ -193,6 +281,10 @@ async function initDb() {
 
   if (!(await columnExists("equipamentos", "observacoes"))) {
     await run(`ALTER TABLE equipamentos ADD COLUMN observacoes TEXT`);
+  }
+
+  if (!(await columnExists("equipamentos", "valor"))) {
+    await run(`ALTER TABLE equipamentos ADD COLUMN valor REAL`);
   }
 
   await run(`

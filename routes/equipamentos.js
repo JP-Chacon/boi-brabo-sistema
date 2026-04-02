@@ -27,6 +27,19 @@ function parsePositiveInt(value, fallback) {
   return parsed;
 }
 
+function parseNullableMoney(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  // Mesma regra do frontend: só dígitos → centavos (ex.: "R$ 12,34" / "12,34" → 12.34)
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return null;
+  const cents = Number(digits);
+  if (!Number.isFinite(cents)) return null;
+  return cents / 100;
+}
+
 function hasAdvancedListQuery(query = {}) {
   return [
     "page",
@@ -133,7 +146,7 @@ router.get("/", async (req, res) => {
       const total = Number(countRow?.total || 0);
       const items = await all(
         `
-          SELECT id, nome, marca, codigo_barras, serial, modelo, observacoes, ${statusExpression} AS status, situacao
+          SELECT id, nome, marca, codigo_barras, serial, modelo, observacoes, valor, ${statusExpression} AS status, situacao
           FROM equipamentos
           ${whereClause}
           ORDER BY id DESC
@@ -155,7 +168,7 @@ router.get("/", async (req, res) => {
 
     const rows = await all(
       `
-        SELECT id, nome, marca, codigo_barras, serial, modelo, observacoes, ${statusExpression} AS status, situacao
+        SELECT id, nome, marca, codigo_barras, serial, modelo, observacoes, valor, ${statusExpression} AS status, situacao
         FROM equipamentos
         WHERE COALESCE(situacao, 'ativo') = 'ativo'
         ORDER BY id DESC
@@ -171,11 +184,12 @@ router.get("/", async (req, res) => {
 router.post("/", requireAtLeast("admin"), async (req, res) => {
   try {
     const usuarioId = Number(req.user?.id);
-    const { nome, marca, status, serial, modelo, observacoes } = req.body || {};
+    const { nome, marca, status, serial, modelo, observacoes, valor } = req.body || {};
     const normalizedStatus = normalizeStatus(status);
     const safeSerial = String(serial || "").trim();
     const safeModelo = String(modelo || "").trim();
     const safeObs = observacoes == null ? null : String(observacoes || "").trim();
+    const safeValor = parseNullableMoney(valor);
 
     if (!nome || !marca || !normalizedStatus || !safeSerial) {
       return res
@@ -184,6 +198,10 @@ router.post("/", requireAtLeast("admin"), async (req, res) => {
           error:
             "Campos obrigatórios: nome, marca, serial e status (Disponível ou Em uso)",
         });
+    }
+
+    if (safeValor != null && safeValor < 0) {
+      return res.status(400).json({ error: "valor inválido" });
     }
 
     if (!["disponivel", "em uso"].includes(normalizedStatus)) {
@@ -197,10 +215,10 @@ router.post("/", requireAtLeast("admin"), async (req, res) => {
 
     const result = await run(
       `
-        INSERT INTO equipamentos (nome, marca, codigo_barras, serial, modelo, observacoes, status, situacao)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'ativo')
+        INSERT INTO equipamentos (nome, marca, codigo_barras, serial, modelo, observacoes, valor, status, situacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ativo')
       `,
-      [nome, marca, finalCode, safeSerial, safeModelo || null, safeObs, normalizedStatus]
+      [nome, marca, finalCode, safeSerial, safeModelo || null, safeObs, safeValor, normalizedStatus]
     );
 
     await registerAuditLog({
@@ -233,11 +251,12 @@ async function handleUpdateEquipamento(req, res) {
   try {
     const usuarioId = Number(req.user?.id);
     const equipamentoId = Number(req.params.id);
-    const { nome, marca, status, serial, modelo, observacoes } = req.body || {};
+    const { nome, marca, status, serial, modelo, observacoes, valor } = req.body || {};
     const normalizedStatus = normalizeStatus(status);
     const safeSerial = String(serial || "").trim();
     const safeModelo = String(modelo || "").trim();
     const safeObs = observacoes == null ? null : String(observacoes || "").trim();
+    const safeValor = parseNullableMoney(valor);
 
     if (!Number.isInteger(equipamentoId) || equipamentoId <= 0) {
       return res.status(400).json({ error: "Equipamento inválido" });
@@ -247,6 +266,10 @@ async function handleUpdateEquipamento(req, res) {
       return res.status(400).json({
         error: "Campos obrigatórios: nome, marca, serial e status",
       });
+    }
+
+    if (safeValor != null && safeValor < 0) {
+      return res.status(400).json({ error: "valor inválido" });
     }
 
     if (!["disponivel", "em uso"].includes(normalizedStatus)) {
@@ -297,10 +320,11 @@ async function handleUpdateEquipamento(req, res) {
             serial = ?,
             modelo = ?,
             observacoes = ?,
+            valor = ?,
             status = ?
         WHERE id = ?
       `,
-      [nome, marca, safeSerial, safeModelo || null, safeObs, normalizedStatus, equipamentoId]
+      [nome, marca, safeSerial, safeModelo || null, safeObs, safeValor, normalizedStatus, equipamentoId]
     );
 
     await registerAuditLog({

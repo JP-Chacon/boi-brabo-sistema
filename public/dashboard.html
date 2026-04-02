@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Opcional: URL da API quando o front não é servido pelo mesmo host/porta (ex.: proxy). -->
+    <meta name="api-base-url" content="" />
     <title>Painel - Boi Brabo</title>
     <script>
       (() => {
@@ -93,6 +95,60 @@
               </svg>
             </span>
             Atribuições
+          </button>
+
+          <button class="saas-nav-item" data-page="relatorios" type="button">
+            <span class="saas-nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18"></path>
+                <path d="M7 16V9"></path>
+                <path d="M12 16v-5"></path>
+                <path d="M17 16V6"></path>
+              </svg>
+            </span>
+            Relatórios
+          </button>
+
+          <button
+            class="saas-nav-item"
+            data-page="organizacao"
+            type="button"
+            id="menu-organizacao"
+            data-admin-only
+            hidden
+          >
+            <span class="saas-nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 21h18"></path>
+                <path d="M6 21V7"></path>
+                <path d="M18 21V7"></path>
+                <path d="M6 7l6-4 6 4"></path>
+                <path d="M9 21v-6h6v6"></path>
+              </svg>
+            </span>
+            Departamentos & Cargos
+          </button>
+
+          <button
+            class="saas-nav-item"
+            data-page="unidades"
+            type="button"
+            id="menu-unidades"
+            data-admin-only
+            hidden
+          >
+            <span class="saas-nav-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 21h18"></path>
+                <path d="M5 21V7l8-4v18"></path>
+                <path d="M19 21V11l-6-4"></path>
+                <path d="M9 9v.01"></path>
+                <path d="M9 12v.01"></path>
+                <path d="M9 15v.01"></path>
+                <path d="M9 18v.01"></path>
+              </svg>
+            </span>
+            Unidades
           </button>
 
           <button class="saas-nav-item" data-page="usuarios" type="button" id="menu-usuarios" data-admin-only hidden>
@@ -440,44 +496,47 @@
                     <span>Cadastre rapidamente um novo membro da equipe com os dados principais.</span>
                   </div>
                   <form id="colaboradorForm" class="saas-form-grid inputs-group" novalidate>
-                    <div class="saas-field">
+                    <div class="saas-field form-group">
                       <label for="nome">Nome <span class="required">*</span></label>
                       <input id="nome" placeholder="Ex: João Silva" autocomplete="name" required />
+                      <span class="form-hint" aria-hidden="true"></span>
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
-                    <div class="saas-field">
-                      <label for="cpf">CPF <span class="required">*</span></label>
-                      <input id="cpf" placeholder="000.000.000-00" inputmode="numeric" maxlength="14" required />
+                    <div class="saas-field form-group">
+                      <label for="documento">Documento <span class="required">*</span></label>
+                      <input
+                        id="documento"
+                        placeholder="Digite CPF ou CNPJ"
+                        inputmode="numeric"
+                        maxlength="18"
+                        autocomplete="off"
+                        required
+                      />
+                      <span class="form-hint" id="documentoHint"></span>
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
-                    <div class="saas-field">
+                    <div class="saas-field form-group">
                       <label for="departamento">Departamento <span class="required">*</span></label>
                       <select id="departamento" required>
                         <option value="" selected disabled>Selecione o departamento</option>
                       </select>
+                      <span class="form-hint" aria-hidden="true"></span>
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
-                    <div class="saas-field">
-                      <label for="departamentoNovo">Novo departamento</label>
-                      <div class="saas-inline-field">
-                        <input id="departamentoNovo" placeholder="Ex: Logística" />
-                        <button class="saas-btn saas-btn-sm" type="button" id="departamentoAddBtn">Adicionar</button>
-                      </div>
-                      <div class="saas-field-error" aria-live="polite" hidden></div>
-                    </div>
-                    <div class="saas-field">
+                    <div class="saas-field form-group">
                       <label for="cargo">Cargo <span class="required">*</span></label>
                       <select id="cargo" required disabled>
                         <option value="" selected disabled>Selecione o departamento primeiro</option>
                       </select>
+                      <span class="form-hint" aria-hidden="true"></span>
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
-                    <div class="saas-field">
-                      <label for="cargoNovo">Novo cargo</label>
-                      <div class="saas-inline-field">
-                        <input id="cargoNovo" placeholder="Ex: Analista de Estoque" disabled />
-                        <button class="saas-btn saas-btn-sm" type="button" id="cargoAddBtn">Adicionar</button>
-                      </div>
+                    <div class="saas-field form-group">
+                      <label for="unidade">Unidade <span class="required">*</span></label>
+                      <select id="unidade" required>
+                        <option value="" selected disabled>Selecione a unidade</option>
+                      </select>
+                      <span class="form-hint" aria-hidden="true"></span>
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-actions">
@@ -493,6 +552,8 @@
                         <th>Colaborador</th>
                         <th>Cargo</th>
                         <th>Departamento</th>
+                        <th>Unidade</th>
+                        <th class="is-actions">Ações</th>
                       </tr>
                     </thead>
                     <tbody></tbody>
@@ -635,6 +696,11 @@
                       <div class="saas-field-error" aria-live="polite" hidden></div>
                     </div>
                     <div class="saas-field">
+                      <label for="eq_valor">Valor (R$)</label>
+                      <input id="eq_valor" placeholder="R$ 0,00" inputmode="numeric" />
+                      <div class="saas-field-error" aria-live="polite" hidden></div>
+                    </div>
+                    <div class="saas-field">
                       <label for="eq_status">Status <span class="required">*</span></label>
                       <select id="eq_status" required>
                         <option value="" selected disabled>Selecione o status</option>
@@ -657,6 +723,7 @@
                         <th>Serial</th>
                         <th>Modelo</th>
                         <th class="is-brand">Marca</th>
+                        <th>Valor</th>
                         <th class="is-code">Código</th>
                         <th class="is-status">Status</th>
                         <th class="is-actions">Ações</th>
@@ -821,9 +888,8 @@
                     <thead>
                       <tr>
                         <th class="is-main">Colaborador</th>
-                        <th class="is-main">Equipamento</th>
-                        <th class="is-code">Código</th>
-                        <th class="is-date">Data</th>
+                        <th class="is-main">Atribuições</th>
+                        <th class="is-date">Última movimentação</th>
                         <th class="is-actions">Ações</th>
                       </tr>
                     </thead>
@@ -838,6 +904,141 @@
                   <button class="saas-btn saas-btn-sm" type="button" id="atribuicoesNextBtn">
                     Próximo
                   </button>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <!-- PAGE: Relatórios financeiros -->
+          <section class="saas-page" data-page="relatorios" hidden>
+            <div class="saas-colab-page">
+              <div class="saas-insight-grid compact">
+                <div class="saas-insight-card tone-blue compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Total investido (ativos)</span>
+                    <strong id="relatorioTotalInvestido">—</strong>
+                    <small>Soma do valor dos equipamentos ativos</small>
+                  </div>
+                </div>
+                <div class="saas-insight-card tone-violet compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14.7 6.3a1 1 0 0 0-1.4 0l-1 1 5.4 5.4 1-1a1 1 0 0 0 0-1.4z"></path>
+                      <path d="m12.3 7.3-8.6 8.6a2 2 0 0 0-.5.9L2 22l5.2-1.2a2 2 0 0 0 .9-.5l8.6-8.6"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Valor em uso</span>
+                    <strong id="relatorioValorEmUso">—</strong>
+                    <small>Equipamentos atribuídos (status em uso)</small>
+                  </div>
+                </div>
+                <div class="saas-insight-card tone-emerald compact">
+                  <div class="saas-insight-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 6 9 17l-5-5"></path>
+                    </svg>
+                  </div>
+                  <div class="saas-insight-meta">
+                    <span>Valor disponível</span>
+                    <strong id="relatorioValorDisponivel">—</strong>
+                    <small>Equipamentos disponíveis no estoque</small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="saas-grid-2 saas-relatorios-charts">
+                <section class="saas-panel saas-colab-shell">
+                  <div class="saas-panel-head no-border">
+                    <div class="saas-panel-title-group">
+                      <h3>Valor por departamento</h3>
+                      <p>Soma do valor dos equipamentos ativos atribuídos a colaboradores de cada departamento.</p>
+                    </div>
+                  </div>
+                  <div class="saas-chart-wrap">
+                    <canvas id="relatorioChartDepartamentos" aria-label="Gráfico de valor por departamento"></canvas>
+                  </div>
+                </section>
+                <section class="saas-panel saas-colab-shell">
+                  <div class="saas-panel-head no-border">
+                    <div class="saas-panel-title-group">
+                      <h3>Valor por status</h3>
+                      <p>Distribuição do valor entre equipamentos disponíveis e em uso.</p>
+                    </div>
+                  </div>
+                  <div class="saas-chart-wrap">
+                    <canvas id="relatorioChartStatus" aria-label="Gráfico de valor por status"></canvas>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+
+          <!-- PAGE: Departamentos & Cargos (admin) -->
+          <section class="saas-page" data-page="organizacao" hidden>
+            <div class="saas-colab-page">
+              <section class="saas-panel saas-colab-shell">
+                <div class="saas-panel-head no-border">
+                  <div class="saas-panel-title-group">
+                    <h3>Departamentos & Cargos</h3>
+                    <p>Gerencie a estrutura organizacional. Clique no departamento para ver os cargos.</p>
+                  </div>
+                  <div class="saas-panel-actions">
+                    <button class="saas-btn primary" type="button" id="organizacaoNewDepartamentoBtn">
+                      + Novo departamento
+                    </button>
+                  </div>
+                </div>
+
+                <div class="saas-table-wrap flush" id="organizacaoTableWrap">
+                  <table class="saas-table" id="organizacaoTable">
+                    <thead>
+                      <tr>
+                        <th class="is-main">Departamento</th>
+                        <th>Cargos</th>
+                        <th class="is-actions">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <!-- PAGE: Unidades (admin) -->
+          <section class="saas-page" data-page="unidades" hidden>
+            <div class="saas-colab-page">
+              <section class="saas-panel saas-colab-shell">
+                <div class="saas-panel-head no-border">
+                  <div class="saas-panel-title-group">
+                    <h3>Unidades</h3>
+                    <p>Gerencie matriz e filiais. As unidades aparecem no cadastro de colaboradores.</p>
+                  </div>
+                  <div class="saas-panel-actions">
+                    <button class="saas-btn primary" type="button" id="unidadesNewBtn">
+                      + Nova unidade
+                    </button>
+                  </div>
+                </div>
+
+                <div class="saas-table-wrap flush" id="unidadesTableWrap">
+                  <table class="saas-table" id="unidadesTable">
+                    <thead>
+                      <tr>
+                        <th class="is-main">Unidade</th>
+                        <th>Tipo</th>
+                        <th>Local</th>
+                        <th class="is-actions">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
                 </div>
               </section>
             </div>
@@ -877,9 +1078,107 @@
     <script src="./node_modules/dayjs/dayjs.min.js"></script>
     <script src="./node_modules/dayjs/plugin/relativeTime.js"></script>
     <script src="./node_modules/dayjs/locale/pt-br.js"></script>
+    <script src="./js/api-base.js"></script>
     <script src="./js/toast.js"></script>
     <script src="./js/theme.js"></script>
+    <!-- Modal: nova unidade (form único) -->
+    <div
+      id="unidadeCreateModal"
+      class="app-modal-overlay app-modal-overlay--unidade-create"
+      hidden
+      aria-hidden="true"
+      role="presentation"
+    >
+      <div
+        class="app-modal app-modal--form app-modal--unidade-create"
+        id="unidadeCreateModalDialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="unidadeCreateModalTitle"
+      >
+        <button
+          type="button"
+          class="unidade-create-modal__close"
+          id="unidadeCreateModalClose"
+          aria-label="Fechar"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+        <form id="unidadeCreateForm" class="app-modal-inner app-modal-inner--unidade" novalidate>
+          <div class="unidade-create-modal__brand">
+            <img
+              src="./assets/boi_brabo.png"
+              alt="Logo Boi Brabo"
+              class="unidade-create-modal__logo"
+              width="100"
+            />
+          </div>
+          <div class="unidade-create-modal__header">
+            <h2 id="unidadeCreateModalTitle" class="app-modal-title unidade-create-modal__title">
+              Nova unidade
+            </h2>
+            <p class="app-modal-message unidade-create-modal__message">
+              Preencha os dados abaixo. O nome da empresa é padrão para todas as unidades.
+            </p>
+          </div>
+          <div class="unidade-create-form">
+            <div class="saas-field">
+              <label for="unidadeCreateNomeEmpresa">Nome da empresa</label>
+              <input
+                id="unidadeCreateNomeEmpresa"
+                type="text"
+                class="app-modal-input"
+                value="Boi Brabo"
+                readonly
+                tabindex="-1"
+                autocomplete="organization"
+              />
+            </div>
+            <div class="saas-field">
+              <label for="unidadeCreateTipo">Tipo</label>
+              <select id="unidadeCreateTipo" class="app-modal-input" required>
+                <option value="matriz">Matriz</option>
+                <option value="filial">Filial</option>
+              </select>
+            </div>
+            <div class="saas-field">
+              <label for="unidadeCreateEstado">Estado (UF)</label>
+              <select id="unidadeCreateEstado" class="app-modal-input" required disabled>
+                <option value="" disabled selected>Carregando estados…</option>
+              </select>
+            </div>
+            <div class="saas-field">
+              <label for="unidadeCreateCidade">Cidade</label>
+              <select id="unidadeCreateCidade" class="app-modal-input" required disabled>
+                <option value="" disabled selected>Selecione primeiro o estado</option>
+              </select>
+            </div>
+            <div class="saas-field">
+              <label for="unidadeCreateAtivo">Status</label>
+              <select id="unidadeCreateAtivo" class="app-modal-input" required>
+                <option value="1" selected>Ativo</option>
+                <option value="0">Inativo</option>
+              </select>
+            </div>
+          </div>
+          <div class="app-modal-actions unidade-create-modal__actions">
+            <button type="button" class="saas-btn saas-btn-ghost" id="unidadeCreateBtnCancel">
+              Cancelar
+            </button>
+            <button type="submit" class="saas-btn primary" id="unidadeCreateBtnSubmit">
+              Criar unidade
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="globalDropdown" class="global-dropdown" hidden></div>
     <script src="./js/modal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.5/dist/chart.umd.min.js"></script>
     <script src="./js/dashboard.js"></script>
   </body>
 </html>

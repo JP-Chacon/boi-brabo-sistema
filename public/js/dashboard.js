@@ -1,8 +1,10 @@
 (() => {
   const API_BASE_URL =
-    window.location.origin && window.location.origin !== "null"
-      ? window.location.origin
-      : "http://localhost:3000";
+    typeof window.resolveApiBaseUrl === "function"
+      ? window.resolveApiBaseUrl()
+      : window.location.origin && window.location.origin !== "null"
+        ? window.location.origin
+        : "http://localhost:3000";
   const TOKEN_KEY = "token";
   const TOKEN_EXPIRES_KEY = "token_expires_at";
   const USER_KEY = "user";
@@ -30,6 +32,8 @@
   const pages = Array.from(document.querySelectorAll(".saas-page"));
   const navItems = Array.from(document.querySelectorAll(".saas-nav-item"));
   const usuariosNavItem = document.getElementById("menu-usuarios");
+  const organizacaoNavItem = document.getElementById("menu-organizacao");
+  const unidadesNavItem = document.getElementById("menu-unidades");
 
   // Stats
   const statColaboradores = document.getElementById("statColaboradores");
@@ -50,10 +54,29 @@
   const equipamentosTbody = document.querySelector("#equipamentosTable tbody");
   const atribuicoesTbody = document.querySelector("#atribuicoesTable tbody");
   const usuariosTbody = document.querySelector("#usuariosTable tbody");
+  const organizacaoTbody = document.querySelector("#organizacaoTable tbody");
+  const unidadesTbody = document.querySelector("#unidadesTable tbody");
   const colaboradoresTableWrap = document.getElementById("colaboradoresTableWrap");
   const equipamentosTableWrap = document.getElementById("equipamentosTableWrap");
   const atribuicoesTableWrap = document.getElementById("atribuicoesTableWrap");
   const usuariosTableWrap = document.getElementById("usuariosTableWrap");
+  const organizacaoTableWrap = document.getElementById("organizacaoTableWrap");
+  const organizacaoNewDepartamentoBtn = document.getElementById("organizacaoNewDepartamentoBtn");
+  const unidadesNewBtn = document.getElementById("unidadesNewBtn");
+  const unidadeCreateModal = document.getElementById("unidadeCreateModal");
+  const unidadeCreateForm = document.getElementById("unidadeCreateForm");
+  const unidadeCreateNomeEmpresa = document.getElementById("unidadeCreateNomeEmpresa");
+  const unidadeCreateTipo = document.getElementById("unidadeCreateTipo");
+  const unidadeCreateEstado = document.getElementById("unidadeCreateEstado");
+  const unidadeCreateCidade = document.getElementById("unidadeCreateCidade");
+  const unidadeCreateAtivo = document.getElementById("unidadeCreateAtivo");
+  const unidadeCreateBtnCancel = document.getElementById("unidadeCreateBtnCancel");
+  const unidadeCreateBtnSubmit = document.getElementById("unidadeCreateBtnSubmit");
+  const unidadeCreateModalClose = document.getElementById("unidadeCreateModalClose");
+  const globalDropdown = document.getElementById("globalDropdown");
+
+  let globalDropdownAnchor = null;
+  let globalDropdownContext = null;
 
   const colaboradoresSearch = document.getElementById("colaboradoresSearch");
   const colaboradoresDepartamentoFilter = document.getElementById("colaboradoresDepartamentoFilter");
@@ -86,6 +109,7 @@
   const equipamentoDrawerTitle = document.getElementById("equipamentoDrawerTitle");
   const equipamentoDrawerSubtitle = document.getElementById("equipamentoDrawerSubtitle");
   const equipamentoSubmitBtn = document.getElementById("equipamentoSubmitBtn");
+  const equipamentoValorInput = document.getElementById("eq_valor");
   const equipamentosPrevBtn = document.getElementById("equipamentosPrevBtn");
   const equipamentosNextBtn = document.getElementById("equipamentosNextBtn");
   const equipamentosPageInfo = document.getElementById("equipamentosPageInfo");
@@ -116,6 +140,11 @@
   const atribuicoesMetricAtivas = document.getElementById("atribuicoesMetricAtivas");
   const atribuicoesMetricColaboradores = document.getElementById("atribuicoesMetricColaboradores");
   const atribuicoesMetricDisponiveis = document.getElementById("atribuicoesMetricDisponiveis");
+  const relatorioTotalInvestidoEl = document.getElementById("relatorioTotalInvestido");
+  const relatorioValorEmUsoEl = document.getElementById("relatorioValorEmUso");
+  const relatorioValorDisponivelEl = document.getElementById("relatorioValorDisponivel");
+  const relatorioChartDepartamentosEl = document.getElementById("relatorioChartDepartamentos");
+  const relatorioChartStatusEl = document.getElementById("relatorioChartStatus");
 
   let colaboradoresCache = [];
   let equipamentosCache = [];
@@ -140,14 +169,279 @@
     colaboradores: null,
     equipamentos: null,
     atribuicoes: null,
+    organizacao: null,
+    unidades: null,
   };
+  let chartRelatorioDept = null;
+  let chartRelatorioStatus = null;
+  let relatoriosDataCache = null;
+  let relatoriosThemeObserver = null;
   let currentPage = "dashboard";
   const PAGE_TRANSITION_MS = 260;
   const LIST_TRANSITION_MS = 220;
   let isPageTransitioning = false;
   let queuedPage = null;
   let isApplyingUrlState = false;
-  const VALID_PAGE_NAMES = new Set(["dashboard", "colaboradores", "equipamentos", "atribuicoes", "usuarios"]);
+  const VALID_PAGE_NAMES = new Set([
+    "dashboard",
+    "colaboradores",
+    "equipamentos",
+    "atribuicoes",
+    "relatorios",
+    "organizacao",
+    "unidades",
+    "usuarios",
+  ]);
+
+  let departamentosCache = [];
+  let cargosCache = [];
+  let unidadesCache = [];
+  let pendingCargoHighlightId = null;
+
+  /** Nome fixo da empresa nas unidades (não editável no fluxo de criação) */
+  const UNIDADE_EMPRESA_NOME = "Boi Brabo";
+
+  /** IBGE — localidades (estados e municípios por UF) */
+  const IBGE_LOCALIDADES_BASE = "https://servicodados.ibge.gov.br/api/v1/localidades";
+  const IBGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const IBGE_LS_ESTADOS = "ibge_estados_v1";
+  const ibgeMunicipiosKey = (uf) => `ibge_municipios_${String(uf || "").toUpperCase()}_v1`;
+
+  const ibgeMemory = { estados: null, municipios: new Map() };
+  let ibgeEstadosPopulated = false;
+  let ibgeEstadosLoading = null;
+
+  function readIbgeCache(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.t !== "number" || parsed.d == null) return null;
+      if (Date.now() - parsed.t > IBGE_CACHE_TTL_MS) return null;
+      return parsed.d;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeIbgeCache(key, data) {
+    try {
+      const payload = JSON.stringify({ t: Date.now(), d: data });
+      if (payload.length > 4_500_000) return;
+      localStorage.setItem(key, payload);
+    } catch {
+      /* quota ou indisponível — cache em memória continua válido */
+    }
+  }
+
+  async function fetchIbgeEstados() {
+    const cached = ibgeMemory.estados || readIbgeCache(IBGE_LS_ESTADOS);
+    if (Array.isArray(cached) && cached.length) {
+      ibgeMemory.estados = cached;
+      return cached;
+    }
+    const res = await fetch(`${IBGE_LOCALIDADES_BASE}/estados`);
+    if (!res.ok) throw new Error("Serviço do IBGE indisponível (estados).");
+    const data = await res.json();
+    const mapped = [...data]
+      .map((e) => ({ id: e.id, sigla: String(e.sigla || "").toUpperCase(), nome: String(e.nome || "").trim() }))
+      .filter((e) => e.sigla && e.nome)
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    ibgeMemory.estados = mapped;
+    writeIbgeCache(IBGE_LS_ESTADOS, mapped);
+    return mapped;
+  }
+
+  async function fetchIbgeMunicipios(uf) {
+    const sigla = String(uf || "")
+      .trim()
+      .toUpperCase();
+    if (sigla.length !== 2 || !/^[A-Z]{2}$/.test(sigla)) {
+      throw new Error("UF inválido.");
+    }
+    const mem = ibgeMemory.municipios.get(sigla);
+    if (Array.isArray(mem) && mem.length) return mem;
+    const cached = readIbgeCache(ibgeMunicipiosKey(sigla));
+    if (Array.isArray(cached) && cached.length) {
+      ibgeMemory.municipios.set(sigla, cached);
+      return cached;
+    }
+    const res = await fetch(`${IBGE_LOCALIDADES_BASE}/estados/${encodeURIComponent(sigla)}/municipios`);
+    if (!res.ok) throw new Error("Serviço do IBGE indisponível (municípios).");
+    const data = await res.json();
+    const mapped = [...data]
+      .map((m) => ({ id: m.id, nome: String(m.nome || "").trim() }))
+      .filter((m) => m.nome)
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    ibgeMemory.municipios.set(sigla, mapped);
+    writeIbgeCache(ibgeMunicipiosKey(sigla), mapped);
+    return mapped;
+  }
+
+  function resetUnidadeCidadeSelect() {
+    if (!unidadeCreateCidade) return;
+    unidadeCreateCidade.innerHTML =
+      '<option value="" disabled selected>Selecione primeiro o estado</option>';
+    unidadeCreateCidade.disabled = true;
+  }
+
+  async function ensureIbgeEstadosNoSelect() {
+    if (!unidadeCreateEstado) return;
+    if (ibgeEstadosPopulated) return;
+    if (ibgeEstadosLoading) return ibgeEstadosLoading;
+
+    ibgeEstadosLoading = (async () => {
+      unidadeCreateEstado.innerHTML = '<option value="" disabled selected>Carregando estados…</option>';
+      unidadeCreateEstado.disabled = true;
+      try {
+        const estados = await fetchIbgeEstados();
+        unidadeCreateEstado.innerHTML = '<option value="" disabled selected>Selecione o estado</option>';
+        for (const e of estados) {
+          const opt = document.createElement("option");
+          opt.value = e.sigla;
+          opt.textContent = `${e.nome} (${e.sigla})`;
+          unidadeCreateEstado.appendChild(opt);
+        }
+        unidadeCreateEstado.disabled = false;
+        ibgeEstadosPopulated = true;
+      } catch (err) {
+        unidadeCreateEstado.innerHTML =
+          '<option value="" disabled selected>Erro ao carregar estados</option>';
+        unidadeCreateEstado.disabled = true;
+        throw err;
+      }
+    })();
+
+    try {
+      await ibgeEstadosLoading;
+    } finally {
+      ibgeEstadosLoading = null;
+    }
+  }
+
+  async function onUnidadeCreateEstadoChange() {
+    const uf = String(unidadeCreateEstado?.value || "")
+      .trim()
+      .toUpperCase();
+    if (!unidadeCreateCidade) return;
+    if (!uf) {
+      resetUnidadeCidadeSelect();
+      return;
+    }
+    unidadeCreateCidade.disabled = true;
+    unidadeCreateCidade.innerHTML = '<option value="" disabled selected>Carregando cidades…</option>';
+    try {
+      const municipios = await fetchIbgeMunicipios(uf);
+      unidadeCreateCidade.innerHTML = '<option value="" disabled selected>Selecione a cidade</option>';
+      for (const m of municipios) {
+        const opt = document.createElement("option");
+        opt.value = m.nome;
+        opt.textContent = m.nome;
+        unidadeCreateCidade.appendChild(opt);
+      }
+      unidadeCreateCidade.disabled = false;
+    } catch (err) {
+      unidadeCreateCidade.innerHTML =
+        '<option value="" disabled selected>Erro ao carregar cidades</option>';
+      showMsg(err.message || "Falha ao carregar cidades do IBGE.", "error");
+    }
+  }
+
+  async function openUnidadeCreateModal() {
+    if (!canManageCriticalData()) {
+      showMsg("Acesso restrito a administradores.", "warning");
+      return;
+    }
+    unidadeCreateForm?.reset();
+    if (unidadeCreateNomeEmpresa) unidadeCreateNomeEmpresa.value = UNIDADE_EMPRESA_NOME;
+    if (unidadeCreateTipo) unidadeCreateTipo.value = "matriz";
+    if (unidadeCreateAtivo) unidadeCreateAtivo.value = "1";
+    resetUnidadeCidadeSelect();
+
+    if (unidadeCreateModal) {
+      unidadeCreateModal.hidden = false;
+      unidadeCreateModal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      try {
+        await ensureIbgeEstadosNoSelect();
+      } catch (err) {
+        await showAlertModal({
+          title: "Não foi possível carregar estados",
+          message: err.message || "Verifique a conexão e tente novamente.",
+        });
+        closeUnidadeCreateModal();
+        return;
+      }
+      if (unidadeCreateEstado && !unidadeCreateEstado.disabled) {
+        unidadeCreateEstado.value = "";
+      }
+      requestAnimationFrame(() => {
+        unidadeCreateModal.classList.add("is-open");
+        unidadeCreateEstado?.focus();
+      });
+    }
+  }
+
+  function closeUnidadeCreateModal() {
+    if (!unidadeCreateModal) return;
+    unidadeCreateModal.classList.remove("is-open");
+    document.body.style.overflow = "";
+    window.setTimeout(() => {
+      unidadeCreateModal.hidden = true;
+      unidadeCreateModal.setAttribute("aria-hidden", "true");
+    }, 220);
+  }
+
+  async function handleUnidadeCreateFormSubmit(e) {
+    e.preventDefault();
+    const estado = String(unidadeCreateEstado?.value || "")
+      .trim()
+      .toUpperCase();
+    const cidade = String(unidadeCreateCidade?.value || "").trim();
+    if (!estado || estado.length !== 2) {
+      await showAlertModal({
+        title: "Local obrigatório",
+        message: "Selecione o estado (UF).",
+      });
+      return;
+    }
+    if (!cidade) {
+      await showAlertModal({
+        title: "Local obrigatório",
+        message: "Selecione a cidade.",
+      });
+      return;
+    }
+    const tipo = unidadeCreateTipo?.value === "filial" ? "filial" : "matriz";
+    const ativo = Number(unidadeCreateAtivo?.value) === 0 ? 0 : 1;
+
+    showMsg("");
+    try {
+      if (unidadeCreateBtnSubmit) setButtonLoading(unidadeCreateBtnSubmit, true, "Criando...");
+      const created = await request("/unidades", {
+        method: "POST",
+        body: {
+          nome: UNIDADE_EMPRESA_NOME,
+          tipo,
+          cidade,
+          estado,
+          ativo,
+        },
+      });
+      closeUnidadeCreateModal();
+      pendingRowHighlight.unidades = created?.id ?? null;
+      showMsg("Unidade criada com sucesso.", "success");
+      await loadUnidadesPage();
+      await loadUnidades({ preserveSelection: true });
+    } catch (err) {
+      await showAlertModal({
+        title: "Não foi possível criar",
+        message: err.message || "Falha ao criar unidade",
+      });
+    } finally {
+      if (unidadeCreateBtnSubmit) setButtonLoading(unidadeCreateBtnSubmit, false);
+    }
+  }
 
   function displayStatusText(status) {
     const value = String(status || "").trim().toLowerCase();
@@ -156,6 +450,30 @@
     if (value === "inativo") return "Inativo";
     if (value === "finalizado") return "Finalizado";
     return status || "—";
+  }
+
+  /** Ex.: "Nome - Cidade - Estado" (omit partes vazias ou "—") */
+  function formatUnidadeDisplayLabel(u) {
+    if (!u || typeof u !== "object") return "—";
+    const nome = String(u.nome ?? "").trim();
+    const cidade = String(u.cidade ?? "").trim();
+    const estado = String(u.estado ?? "").trim();
+    const c = cidade && cidade !== "—" ? cidade : "";
+    const e = estado && estado !== "—" ? estado : "";
+    const parts = [];
+    if (nome) parts.push(nome);
+    if (c) parts.push(c);
+    if (e) parts.push(e);
+    return parts.length ? parts.join(" - ") : "—";
+  }
+
+  function formatColaboradorUnidadeCell(r) {
+    if (!r) return "—";
+    const nome = String(r.unidade || "").trim();
+    const cidade = String(r.unidade_cidade || "").trim();
+    const estado = String(r.unidade_estado || "").trim();
+    if (!cidade && !estado) return nome || "—";
+    return formatUnidadeDisplayLabel({ nome, cidade, estado });
   }
 
   function pluralize(count, singular, plural) {
@@ -455,7 +773,29 @@
         usuariosNavItem.hidden = false;
       }
     }
+    if (organizacaoNavItem) {
+      if (!isAdmin) {
+        organizacaoNavItem.remove();
+      } else {
+        organizacaoNavItem.hidden = false;
+      }
+    }
+    if (unidadesNavItem) {
+      if (!isAdmin) {
+        unidadesNavItem.remove();
+      } else {
+        unidadesNavItem.hidden = false;
+      }
+    }
     if (!isAdmin && currentPage === "usuarios") {
+      showMsg("Acesso restrito a administradores.", "warning");
+      showPage("dashboard");
+    }
+    if (!isAdmin && currentPage === "organizacao") {
+      showMsg("Acesso restrito a administradores.", "warning");
+      showPage("dashboard");
+    }
+    if (!isAdmin && currentPage === "unidades") {
       showMsg("Acesso restrito a administradores.", "warning");
       showPage("dashboard");
     }
@@ -464,11 +804,6 @@
     if (colaboradorNewBtn) colaboradorNewBtn.hidden = !canManage;
     if (equipamentoNewBtn) equipamentoNewBtn.hidden = !canManage;
     if (atribuicaoNewBtn) atribuicaoNewBtn.hidden = false;
-    if (cargoAddBtn) {
-      cargoAddBtn.disabled =
-        !canManage || !departamentoSelect?.value;
-    }
-    if (departamentoAddBtn) departamentoAddBtn.disabled = !canManage;
   }
 
   function normalizeTextCase(value) {
@@ -713,6 +1048,17 @@
     if (colaboradorNewBtn) {
       colaboradorNewBtn.textContent = isOpen ? "Fechar cadastro" : "+ Novo colaborador";
     }
+    if (!isOpen) {
+      colaboradorEditingId = null;
+      resetForm(colaboradorForm);
+      const head = colaboradorFormPanel.querySelector(".saas-drawer-head strong");
+      const sub = colaboradorFormPanel.querySelector(".saas-drawer-head span");
+      if (head) head.textContent = "Novo colaborador";
+      if (sub) sub.textContent = "Cadastre rapidamente um novo membro da equipe com os dados principais.";
+      const submitLabel = colaboradorForm?.querySelector("button[type='submit']");
+      if (submitLabel) submitLabel.textContent = "Cadastrar colaborador";
+      void loadCargosForDepartamento(null);
+    }
   }
 
   function setEquipamentoFormOpen(isOpen) {
@@ -725,7 +1071,7 @@
   }
 
   function resetEquipamentoForm() {
-    equipamentoForm?.reset();
+    resetForm(equipamentoForm);
     if (equipamentoIdInput) equipamentoIdInput.value = "";
     if (equipamentoDrawerTitle) equipamentoDrawerTitle.textContent = "Cadastrar equipamento";
     if (equipamentoDrawerSubtitle) {
@@ -733,7 +1079,7 @@
         "Preencha os dados do ativo. O código será gerado automaticamente pelo sistema.";
     }
     if (equipamentoSubmitBtn) equipamentoSubmitBtn.textContent = "Cadastrar equipamento";
-    resetFormState(equipamentoForm);
+    if (equipamentoValorInput) equipamentoValorInput.value = "";
   }
 
   function startEquipamentoCreate() {
@@ -751,6 +1097,10 @@
     document.getElementById("eq_modelo").value = String(item.modelo || "");
     document.getElementById("eq_marca").value = String(item.marca || "");
     document.getElementById("eq_observacoes").value = String(item.observacoes || "");
+    if (equipamentoValorInput) {
+      const v = parseValorEquipamento(item.valor);
+      equipamentoValorInput.value = v != null && Number.isFinite(v) ? formatNumberToBrl(v) : "";
+    }
     document.getElementById("eq_status").value = String(item.status || "");
     if (equipamentoDrawerTitle) equipamentoDrawerTitle.textContent = "Editar equipamento";
     if (equipamentoDrawerSubtitle) {
@@ -773,11 +1123,10 @@
   }
 
   const cargoSelect = document.getElementById("cargo");
-  const cargoNovoInput = document.getElementById("cargoNovo");
-  const cargoAddBtn = document.getElementById("cargoAddBtn");
   const departamentoSelect = document.getElementById("departamento");
-  const departamentoNovoInput = document.getElementById("departamentoNovo");
-  const departamentoAddBtn = document.getElementById("departamentoAddBtn");
+  const unidadeSelect = document.getElementById("unidade");
+
+  let colaboradorEditingId = null;
 
   async function loadDepartamentos({ preserveSelection = true, selectId = null } = {}) {
     if (!departamentoSelect) return;
@@ -791,6 +1140,10 @@
         opt.textContent = String(d.nome || "");
         departamentoSelect.appendChild(opt);
       }
+      const createOpt = document.createElement("option");
+      createOpt.value = "__create_departamento__";
+      createOpt.textContent = "+ Criar novo departamento";
+      departamentoSelect.appendChild(createOpt);
       const nextValue = selectId != null ? String(selectId) : current;
       if (nextValue) departamentoSelect.value = nextValue;
     } catch {
@@ -816,17 +1169,10 @@
         '<option value="" selected disabled>Selecione o departamento primeiro</option>';
       cargoSelect.disabled = true;
       cargoSelect.value = "";
-      if (cargoNovoInput) {
-        cargoNovoInput.value = "";
-        cargoNovoInput.disabled = true;
-      }
-      if (cargoAddBtn) cargoAddBtn.disabled = true;
       return;
     }
 
     cargoSelect.disabled = false;
-    if (cargoNovoInput) cargoNovoInput.disabled = false;
-    if (cargoAddBtn) cargoAddBtn.disabled = !canManageCriticalData();
 
     try {
       const rows = await request(`/cargos?departamento_id=${encodeURIComponent(depNum)}`);
@@ -837,6 +1183,10 @@
         opt.textContent = String(c.nome || "");
         cargoSelect.appendChild(opt);
       }
+      const createOpt = document.createElement("option");
+      createOpt.value = "__create_cargo__";
+      createOpt.textContent = "+ Criar novo cargo";
+      cargoSelect.appendChild(createOpt);
       const nextValue = selectId != null ? String(selectId) : current;
       if (nextValue && Array.from(cargoSelect.options).some((o) => o.value === nextValue)) {
         cargoSelect.value = nextValue;
@@ -844,6 +1194,30 @@
     } catch {
       cargoSelect.innerHTML =
         '<option value="" selected disabled>Não foi possível carregar cargos</option>';
+    }
+  }
+
+  async function loadUnidades({ preserveSelection = true, selectId = null } = {}) {
+    if (!unidadeSelect) return;
+    const current = preserveSelection ? String(unidadeSelect.value || "") : "";
+    try {
+      const rows = await request("/unidades");
+      const list = Array.isArray(rows) ? rows : [];
+      unidadesCache = list;
+      unidadeSelect.innerHTML = '<option value="" selected disabled>Selecione a unidade</option>';
+      for (const u of list.sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))) {
+        const opt = document.createElement("option");
+        opt.value = String(u.id);
+        opt.textContent = formatUnidadeDisplayLabel(u);
+        unidadeSelect.appendChild(opt);
+      }
+      const nextValue = selectId != null ? String(selectId) : current;
+      if (nextValue && Array.from(unidadeSelect.options).some((o) => o.value === nextValue)) {
+        unidadeSelect.value = nextValue;
+      }
+    } catch {
+      unidadeSelect.innerHTML =
+        '<option value="" selected disabled>Não foi possível carregar unidades</option>';
     }
   }
 
@@ -872,6 +1246,46 @@
       .replace(/\.(\d{3})(\d)/, ".$1-$2");
   }
 
+  function parseBrlToNumber(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) return null;
+    const digits = raw.replace(/[^\d]/g, "");
+    if (!digits) return null;
+    const cents = Number(digits);
+    if (!Number.isFinite(cents)) return null;
+    return cents / 100;
+  }
+
+  /** Valor numérico para enviar na API (POST/PATCH equipamentos). */
+  function moedaParaNumero(inputValor) {
+    return parseBrlToNumber(inputValor);
+  }
+
+  /** Normaliza valor vindo da API/banco (número ou string) para exibição. */
+  function parseValorEquipamento(val) {
+    if (val == null || val === "") return null;
+    if (typeof val === "number") return Number.isFinite(val) ? val : null;
+    const s = String(val).trim().replace(/\s/g, "");
+    if (!s) return null;
+    const asNum = Number(s.replace(",", "."));
+    if (Number.isFinite(asNum)) return asNum;
+    return parseBrlToNumber(s);
+  }
+
+  function formatNumberToBrl(amount) {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return "R$ 0,00";
+    return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
+
+  function formatBrlOnInput(value) {
+    const digits = String(value || "").replace(/[^\d]/g, "");
+    if (!digits) return "";
+    const cents = Number(digits);
+    if (!Number.isFinite(cents)) return "";
+    return formatNumberToBrl(cents / 100);
+  }
+
   function isValidCpf(value) {
     const cpf = digitsOnly(value);
     if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
@@ -889,6 +1303,49 @@
     return check === Number(cpf[10]);
   }
 
+  function isValidCnpjDigits(digits) {
+    const cnpj = String(digits || "");
+    if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
+    const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let sum = 0;
+    for (let i = 0; i < 12; i += 1) sum += Number(cnpj[i]) * w1[i];
+    let mod = sum % 11;
+    const d1 = mod < 2 ? 0 : 11 - mod;
+    if (d1 !== Number(cnpj[12])) return false;
+    sum = 0;
+    for (let i = 0; i < 13; i += 1) sum += Number(cnpj[i]) * w2[i];
+    mod = sum % 11;
+    const d2 = mod < 2 ? 0 : 11 - mod;
+    return d2 === Number(cnpj[13]);
+  }
+
+  function formatDocumentoMask(value) {
+    const d = digitsOnly(value).slice(0, 14);
+    if (!d.length) return "";
+    if (d.length <= 11) return formatCpf(d);
+    let out = d.slice(0, 2);
+    if (d.length > 2) out += `.${d.slice(2, 5)}`;
+    if (d.length > 5) out += `.${d.slice(5, 8)}`;
+    if (d.length > 8) out += `/${d.slice(8, 12)}`;
+    if (d.length > 12) out += `-${d.slice(12, 14)}`;
+    return out;
+  }
+
+  function updateDocumentoHintUi() {
+    const el = document.getElementById("documento");
+    const hint = document.getElementById("documentoHint");
+    if (!el || !hint) return;
+    const d = digitsOnly(el.value);
+    if (!d.length) {
+      hint.textContent = "";
+      el.setAttribute("placeholder", "Digite CPF ou CNPJ");
+      return;
+    }
+    hint.textContent = d.length <= 11 ? "CPF detectado" : "CNPJ detectado";
+    el.setAttribute("placeholder", d.length <= 11 ? "000.000.000-00" : "00.000.000/0000-00");
+  }
+
   const fieldRules = {
     nome: {
       requiredMessage: "Informe o nome.",
@@ -896,17 +1353,37 @@
       validate: (value) =>
         value.length >= 3 ? "" : "Informe o nome completo do colaborador.",
     },
-    cpf: {
-      requiredMessage: "Informe o CPF.",
-      formatOnInput: formatCpf,
-      autoAdvance: (value) => digitsOnly(value).length === 11 && isValidCpf(value),
-      validate: (value) => (isValidCpf(value) ? "" : "CPF inválido."),
+    documento: {
+      requiredMessage: "Informe o documento.",
+      formatOnInput: (value) => {
+        const formatted = formatDocumentoMask(value);
+        window.requestAnimationFrame(() => updateDocumentoHintUi());
+        return formatted;
+      },
+      autoAdvance: (value) => {
+        const d = digitsOnly(value);
+        if (d.length === 11 && isValidCpf(value)) return true;
+        if (d.length === 14 && isValidCnpjDigits(d)) return true;
+        return false;
+      },
+      validate: (value) => {
+        const d = digitsOnly(value);
+        if (!d.length) return "";
+        if (d.length !== 11 && d.length !== 14) {
+          return "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) completo.";
+        }
+        if (d.length === 11) return isValidCpf(value) ? "" : "CPF inválido.";
+        return isValidCnpjDigits(d) ? "" : "CNPJ inválido.";
+      },
     },
     cargo: {
       requiredMessage: "Selecione um cargo.",
     },
     departamento: {
       requiredMessage: "Selecione um departamento.",
+    },
+    unidade: {
+      requiredMessage: "Selecione uma unidade.",
     },
     eq_nome: {
       requiredMessage: "Informe o nome do equipamento.",
@@ -925,6 +1402,14 @@
         value.length >= 2 ? "" : "Informe a marca do equipamento.",
     },
     eq_observacoes: {},
+    eq_valor: {
+      formatOnInput: formatBrlOnInput,
+      validate: (value) => {
+        const parsed = parseBrlToNumber(value);
+        if (parsed == null) return "";
+        return parsed >= 0 ? "" : "Valor inválido.";
+      },
+    },
     eq_status: {
       requiredMessage: "Selecione o status do equipamento.",
     },
@@ -952,6 +1437,9 @@
     wrapper.classList.remove("is-valid", "is-invalid");
     if (state === "valid") wrapper.classList.add("is-valid");
     if (state === "invalid") wrapper.classList.add("is-invalid");
+
+    field.classList.remove("input-success", "input-error");
+    if (state === "valid") field.classList.add("input-success");
 
     field.setAttribute("aria-invalid", state === "invalid" ? "true" : "false");
 
@@ -1013,6 +1501,37 @@
       setFieldState(field, "", "");
     });
   }
+
+  function resetForm(formElement) {
+    if (!formElement) return;
+    formElement.reset();
+    formElement.querySelectorAll(".input-success, .input-error").forEach((el) => {
+      el.classList.remove("input-success", "input-error");
+    });
+    formElement.querySelectorAll(".saas-field").forEach((w) => {
+      w.classList.remove("is-valid", "is-invalid");
+    });
+    formElement.querySelectorAll(".saas-field-error").forEach((el) => {
+      el.textContent = "";
+      el.hidden = true;
+    });
+    formElement.querySelectorAll(".form-hint").forEach((el) => {
+      el.textContent = "";
+    });
+    formElement.querySelectorAll("input, select, textarea").forEach((field) => {
+      delete field.dataset.touched;
+      delete field.dataset.autoAdvanced;
+      field.setAttribute("aria-invalid", "false");
+    });
+    if (formElement.querySelector("#documento")) {
+      updateDocumentoHintUi();
+    }
+    if (formElement.id === "atribuirForm") {
+      syncAtribEquipamentoUI();
+    }
+  }
+
+  window.resetForm = resetForm;
 
   function setupFieldValidation(field) {
     if (!field?.id || !fieldRules[field.id]) return;
@@ -1202,6 +1721,18 @@
         title: "Atribuições",
         subtitle: "Entregas, devoluções e acompanhamento",
       },
+      relatorios: {
+        title: "Relatórios",
+        subtitle: "Dashboard financeiro dos equipamentos",
+      },
+      organizacao: {
+        title: "Departamentos & Cargos",
+        subtitle: "Estrutura organizacional do sistema",
+      },
+      unidades: {
+        title: "Unidades",
+        subtitle: "Matriz, filiais e localização",
+      },
       usuarios: {
         title: "Usuários",
         subtitle: "Gerenciamento de acessos e perfis",
@@ -1214,6 +1745,9 @@
     if (page === "colaboradores") loadColaboradores().catch(() => {});
     if (page === "equipamentos") loadEquipamentos().catch(() => {});
     if (page === "atribuicoes") loadAtribuicoesPage().catch(() => {});
+    if (page === "relatorios") loadRelatoriosPage().catch(() => {});
+    if (page === "organizacao") loadOrganizacaoPage().catch(() => {});
+    if (page === "unidades") loadUnidadesPage().catch(() => {});
     if (page === "usuarios") loadUsuarios().catch(() => {});
   }
 
@@ -1269,6 +1803,10 @@
   function showPage(page, { syncUrl = true, replaceHistory = false } = {}) {
     if (!page) return;
     if (page === "usuarios" && !canManageUsers()) {
+      showMsg("Acesso restrito a administradores.", "warning");
+      return;
+    }
+    if ((page === "organizacao" || page === "unidades") && !canManageCriticalData()) {
       showMsg("Acesso restrito a administradores.", "warning");
       return;
     }
@@ -1365,7 +1903,7 @@
       );
       renderEmptyRow(
         colaboradoresTbody,
-        3,
+        5,
         hasFilters ? "Nenhum resultado encontrado" : "Nenhum colaborador cadastrado",
         hasFilters
           ? "Nenhum resultado encontrado para os filtros aplicados."
@@ -1381,12 +1919,27 @@
             <span class="saas-colab-avatar">${escapeHtml(getNameInitials(r.nome))}</span>
             <div class="saas-colab-person-copy">
               <div class="saas-cell-title">${escapeHtml(r.nome)}</div>
-              <div class="table-subtext">${escapeHtml(r.cpf)}</div>
+              <div class="table-subtext">${escapeHtml(formatDocumentoMask(r.documento || r.cpf || ""))}</div>
             </div>
           </div>
         </td>
         <td><span class="badge badge-role">${escapeHtml(r.cargo)}</span></td>
         <td><span class="badge badge-role">${escapeHtml(r.departamento || "—")}</span></td>
+        <td><span class="saas-code">${escapeHtml(formatColaboradorUnidadeCell(r))}</span></td>
+        <td>
+          <div class="saas-table-actions">
+            <button
+              class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action"
+              type="button"
+              data-action="open-colaborador-menu"
+              data-colaborador-id="${escapeHtml(r.id)}"
+              title="Ações"
+              aria-label="Ações"
+            >
+              Ações ▾
+            </button>
+          </div>
+        </td>
       `;
       highlightRowIfNeeded(tr, "colaboradores", r.id);
       colaboradoresTbody.appendChild(tr);
@@ -1839,7 +2392,7 @@
       const hasFilters = countEquipamentosActiveFilters() > 0;
       renderEmptyRow(
         equipamentosTbody,
-        7,
+        8,
         hasFilters ? "Nenhum resultado encontrado" : "Nenhum equipamento encontrado",
         hasFilters
           ? "Nenhum resultado encontrado para os filtros aplicados."
@@ -1851,6 +2404,9 @@
     for (const r of rows || []) {
       const isEmUso = String(r.status || "").trim().toLowerCase() === "em uso";
       const isInativo = String(r.situacao || "ativo").trim().toLowerCase() === "inativo";
+      const parsedValor = parseValorEquipamento(r.valor);
+      const valorLabel =
+        parsedValor != null && Number.isFinite(parsedValor) ? formatNumberToBrl(parsedValor) : "—";
       const editDisabledAttr = !canManage
         ? 'disabled title="Permissão insuficiente"'
         : isInativo
@@ -1875,9 +2431,9 @@
           </div>
         </td>
         <td>
-          <div class="saas-table-stack">
-            <span class="saas-code code">${escapeHtml(r.serial || "—")}</span>
-            <span class="table-subtext">Serial único</span>
+          <div class="eq-serial">
+            <div class="serial-code">${escapeHtml(r.serial || "—")}</div>
+            <div class="serial-sub">· Serial único</div>
           </div>
         </td>
         <td>
@@ -1888,6 +2444,12 @@
         <td>
           <div class="saas-table-stack">
             <span class="badge light badge-brand">${escapeHtml(r.marca)}</span>
+          </div>
+        </td>
+        <td>
+          <div class="saas-table-stack">
+            <span class="saas-code code">${escapeHtml(valorLabel)}</span>
+            <span class="table-subtext">Valor do ativo</span>
           </div>
         </td>
         <td>
@@ -1932,55 +2494,153 @@
       const hasFilters = countAtribuicoesActiveFilters() > 0;
       renderEmptyRow(
         atribuicoesTbody,
-        5,
+        4,
         hasFilters ? "Nenhum resultado encontrado" : "Nenhuma atribuição encontrada",
         hasFilters
           ? "Nenhum resultado encontrado para os filtros aplicados."
-          : "Ajuste os filtros selecionados ou realize uma nova atribuição para visualizar registros."
+          : "Ajuste os filtros ou clique em 'Nova atribuição'."
       );
       return;
     }
+    const groups = new Map();
     for (const r of rows || []) {
-      const isAtiva = String(r.status || "").trim().toLowerCase() === "ativo";
-      const devolucaoInfo =
-        !isAtiva && r.data_devolucao
-          ? `Finalizada ${formatDateLabel(r.data_devolucao)}`
-          : relativeTime(r.data_atribuicao);
+      const colId = Number(r.colaborador_id || 0);
+      const key = colId > 0 ? String(colId) : String(r.colaborador_nome || "");
+      if (!groups.has(key)) {
+        groups.set(key, {
+          colaborador_id: colId,
+          colaborador_nome: String(r.colaborador_nome || "—"),
+          latest: r.data_atribuicao || null,
+          items: [],
+          hasActive: false,
+          highlightId: r.id,
+        });
+      }
+      const g = groups.get(key);
+      g.items.push({
+        id: r.id,
+        status: r.status,
+        data_atribuicao: r.data_atribuicao,
+        data_devolucao: r.data_devolucao,
+        equipamento_id: r.equipamento_id,
+        equipamento_nome: r.equipamento_nome,
+        codigo_barras: r.codigo_barras,
+        serial: r.serial,
+        modelo: r.modelo,
+      });
+      const ts = new Date(String(r.data_atribuicao || "")).getTime();
+      const cur = g.latest ? new Date(String(g.latest)).getTime() : 0;
+      if (Number.isFinite(ts) && ts > cur) g.latest = r.data_atribuicao;
+      if (String(r.status || "").trim().toLowerCase() === "ativo") g.hasActive = true;
+      if (r.id && Number(r.id) > Number(g.highlightId || 0)) g.highlightId = r.id;
+    }
+
+    const list = Array.from(groups.values()).sort((a, b) =>
+      String(b.latest || "").localeCompare(String(a.latest || ""))
+    );
+
+    for (const g of list) {
+      const latestLabel = g.latest ? formatDateLabel(g.latest) : "—";
+      const activeCount = g.items.filter((x) => String(x.status || "").trim().toLowerCase() === "ativo").length;
+      const totalCount = g.items.length;
+
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>
           <div class="saas-colab-person">
-            <span class="saas-colab-avatar">${escapeHtml(getNameInitials(r.colaborador_nome))}</span>
+            <span class="saas-colab-avatar">${escapeHtml(getNameInitials(g.colaborador_nome))}</span>
             <div class="saas-colab-person-copy">
-              <div class="saas-cell-title">${escapeHtml(r.colaborador_nome)}</div>
+              <div class="saas-cell-title">${escapeHtml(g.colaborador_nome)}</div>
+              <div class="table-subtext">${escapeHtml(
+                activeCount > 0
+                  ? `${activeCount} ativo(s) • ${totalCount} no total`
+                  : `${totalCount} registro(s)`
+              )}</div>
             </div>
           </div>
         </td>
         <td>
-          <div class="saas-table-stack">
-            <div class="saas-cell-title">${escapeHtml(r.equipamento_nome)}</div>
-            <span class="table-subtext">Equipamento vinculado</span>
-          </div>
-        </td>
-        <td><span class="saas-code">${escapeHtml(r.codigo_barras)}</span></td>
-        <td>
-          <div class="saas-table-stack">
-            <span class="saas-badge info">${formatDateLabel(r.data_atribuicao)}</span>
-            <span class="table-subtext">${escapeHtml(devolucaoInfo)}</span>
-          </div>
+          <button class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action" type="button" data-action="toggle-atribuicoes" data-colaborador-key="${escapeHtml(
+            String(g.colaborador_id || g.colaborador_nome)
+          )}">
+            Ver atribuições
+          </button>
         </td>
         <td>
-          ${
-            isAtiva
-              ? `<button class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action" type="button" data-action="devolver" data-equipamento-id="${r.equipamento_id}" data-colaborador-nome="${escapeHtml(r.colaborador_nome)}" data-equipamento-nome="${escapeHtml(r.equipamento_nome)}">
-            Devolver
-          </button>`
-              : statusBadge("finalizado")
-          }
+          <div class="saas-table-stack">
+            <span class="saas-badge info">${escapeHtml(latestLabel)}</span>
+            <span class="table-subtext">${escapeHtml(g.latest ? relativeTime(g.latest) : "")}</span>
+          </div>
+        </td>
+        <td>${g.hasActive ? statusBadge("ativo") : statusBadge("finalizado")}</td>
+      `;
+
+      const detailsTr = document.createElement("tr");
+      detailsTr.className = "atribuicoes-details-row";
+      detailsTr.dataset.colaboradorKey = String(g.colaborador_id || g.colaborador_nome);
+      detailsTr.hidden = true;
+      const itemsHtml = g.items
+        .slice()
+        .sort((a, b) => String(b.data_atribuicao || "").localeCompare(String(a.data_atribuicao || "")))
+        .map((it) => {
+          const isAtiva = String(it.status || "").trim().toLowerCase() === "ativo";
+          const action = isAtiva
+            ? `<button class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action" type="button" data-action="devolver" data-equipamento-id="${escapeHtml(
+                it.equipamento_id
+              )}" data-colaborador-nome="${escapeHtml(
+                g.colaborador_nome
+              )}" data-equipamento-nome="${escapeHtml(String(it.equipamento_nome || ""))}">Devolver</button>`
+            : statusBadge("finalizado");
+          const statusClass = isAtiva ? "ativo" : "finalizado";
+          const statusLabel = isAtiva ? "Ativo" : "Finalizado";
+          const dateLabel = formatDateLabel(it.data_atribuicao);
+          return `
+            <div class="atrib-grid-row">
+              <div class="atrib-cell atrib-item">
+                <div class="saas-table-stack">
+                  <div class="saas-cell-title">${escapeHtml(String(it.equipamento_nome || "—"))}</div>
+                  <span class="table-subtext">
+                    <span class="saas-code">${escapeHtml(String(it.codigo_barras || "—"))}</span>
+                    <span>•</span>
+                    <span>ID #${escapeHtml(String(it.equipamento_id || "—"))}</span>
+                  </span>
+                </div>
+              </div>
+              <div class="atrib-cell attrib-serial"><span class="saas-code">${escapeHtml(String(it.serial || "—"))}</span></div>
+              <div class="atrib-cell attrib-modelo"><span class="badge light badge-brand">${escapeHtml(String(it.modelo || "—"))}</span></div>
+              <div class="atrib-cell attrib-data"><span class="saas-badge info">${escapeHtml(dateLabel)}</span></div>
+              <div class="atrib-cell attrib-status"><span class="status ${statusClass}">${escapeHtml(statusLabel)}</span></div>
+              <div class="atrib-cell attrib-actions">${action}</div>
+            </div>
+          `;
+        })
+        .join("");
+
+      detailsTr.innerHTML = `
+        <td colspan="4">
+          <div class="atribuicoes-details">
+            <div class="atrib-grid">
+              <div class="atrib-grid-head">
+                <div class="atrib-grid-row is-head">
+                  <div class="atrib-cell">Item</div>
+                  <div class="atrib-cell">Serial</div>
+                  <div class="atrib-cell">Modelo</div>
+                  <div class="atrib-cell">Data</div>
+                  <div class="atrib-cell">Status</div>
+                  <div class="atrib-cell">Ações</div>
+                </div>
+              </div>
+              <div class="atrib-grid-body">
+                ${itemsHtml}
+              </div>
+            </div>
+          </div>
         </td>
       `;
-      highlightRowIfNeeded(tr, "atribuicoes", r.id);
+
+      highlightRowIfNeeded(tr, "atribuicoes", g.highlightId);
       atribuicoesTbody.appendChild(tr);
+      atribuicoesTbody.appendChild(detailsTr);
     }
   }
 
@@ -2073,6 +2733,416 @@
     }
   }
 
+  function renderOrganizacao() {
+    if (!organizacaoTbody) return;
+    organizacaoTbody.innerHTML = "";
+
+    const deps = Array.isArray(departamentosCache) ? departamentosCache : [];
+    const cargos = Array.isArray(cargosCache) ? cargosCache : [];
+
+    if (!deps.length) {
+      renderEmptyRow(
+        organizacaoTbody,
+        3,
+        "Nenhum departamento encontrado",
+        "Crie departamentos pelo cadastro de colaboradores ou nesta tela com “+ Novo departamento”."
+      );
+      return;
+    }
+
+    const cargosByDep = new Map();
+    cargos.forEach((c) => {
+      const depId = Number(c.departamento_id || 0);
+      if (!Number.isInteger(depId) || depId <= 0) return;
+      if (!cargosByDep.has(depId)) cargosByDep.set(depId, []);
+      cargosByDep.get(depId).push(c);
+    });
+
+    deps.forEach((d) => {
+      const depId = Number(d.id);
+      const list = (cargosByDep.get(depId) || []).slice().sort((a, b) =>
+        String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR")
+      );
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <div class="saas-table-stack">
+            <div class="saas-cell-title">${escapeHtml(d.nome || "—")}</div>
+            <span class="table-subtext">ID #${escapeHtml(d.id)}</span>
+          </div>
+        </td>
+        <td>
+          <span class="saas-badge info">${escapeHtml(pluralize(list.length, "cargo", "cargos"))}</span>
+        </td>
+        <td>
+          <div class="saas-table-actions">
+            <button class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action" type="button" data-action="toggle-dep-cargos" data-dep-id="${escapeHtml(
+              d.id
+            )}">
+              Ver cargos
+            </button>
+            <button class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action" type="button" data-action="create-cargo" data-dep-id="${escapeHtml(
+              d.id
+            )}">
+              + Novo cargo
+            </button>
+            <button class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action" type="button" data-action="dep-actions" data-dep-id="${escapeHtml(
+              d.id
+            )}" title="Ações" aria-label="Ações">
+              Ações ▾
+            </button>
+          </div>
+        </td>
+      `;
+
+      const detailsTr = document.createElement("tr");
+      detailsTr.className = "atribuicoes-details-row";
+      detailsTr.dataset.depId = String(d.id);
+      detailsTr.hidden = true;
+
+      const itemsHtml = list
+        .map((c) => {
+          const shouldHighlight = Number(pendingCargoHighlightId) === Number(c.id);
+          return `
+            <div class="atribuicoes-details-item ${shouldHighlight ? "saas-row-highlight" : ""}" data-cargo-id="${escapeHtml(
+              String(c.id || "")
+            )}">
+              <div class="atribuicoes-details-main">
+                <div class="saas-cell-title">${escapeHtml(String(c.nome || "—"))}</div>
+                <div class="table-subtext">Cargo • ID #${escapeHtml(String(c.id || ""))}</div>
+              </div>
+              <div class="atribuicoes-details-action">
+                <button class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action" type="button" data-action="cargo-actions" data-cargo-id="${escapeHtml(
+                  String(c.id || "")
+                )}" data-dep-id="${escapeHtml(String(d.id || ""))}" title="Ações" aria-label="Ações">
+                  Ações ▾
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      detailsTr.innerHTML = `
+        <td colspan="3">
+          <div class="atribuicoes-details">
+            ${itemsHtml || `<div class="table-subtext">Nenhum cargo neste departamento.</div>`}
+          </div>
+        </td>
+      `;
+
+      highlightRowIfNeeded(tr, "organizacao", d.id);
+      organizacaoTbody.appendChild(tr);
+      organizacaoTbody.appendChild(detailsTr);
+    });
+
+    if (pendingCargoHighlightId != null) {
+      const el = organizacaoTbody.querySelector(`[data-cargo-id="${CSS.escape(String(pendingCargoHighlightId))}"]`);
+      if (el?.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      pendingCargoHighlightId = null;
+    }
+  }
+
+  function renderUnidades() {
+    if (!unidadesTbody) return;
+    unidadesTbody.innerHTML = "";
+
+    const list = Array.isArray(unidadesCache) ? unidadesCache : [];
+    if (!list.length) {
+      renderEmptyRow(
+        unidadesTbody,
+        4,
+        "Nenhuma unidade encontrada",
+        "Crie unidades para começar a padronizar o cadastro de colaboradores."
+      );
+      return;
+    }
+
+    for (const u of list) {
+      const tr = document.createElement("tr");
+      const titulo = formatUnidadeDisplayLabel(u);
+      const tipo = String(u.tipo || "—");
+      const cidade = String(u.cidade || "").trim();
+      const estado = String(u.estado || "").trim();
+      const local = cidade && estado ? `${cidade}/${estado}` : cidade || estado || "—";
+
+      tr.innerHTML = `
+        <td>
+          <div class="saas-table-stack">
+            <div class="saas-cell-title">${escapeHtml(titulo)}</div>
+            <span class="table-subtext">ID #${escapeHtml(String(u.id || ""))}</span>
+          </div>
+        </td>
+        <td><span class="saas-badge info">${escapeHtml(tipo)}</span></td>
+        <td><span class="saas-code">${escapeHtml(local)}</span></td>
+        <td>
+          <div class="saas-table-actions">
+            <button
+              class="saas-btn saas-btn-ghost saas-btn-sm saas-btn-action"
+              type="button"
+              data-action="unidade-actions"
+              data-unidade-id="${escapeHtml(String(u.id || ""))}"
+              title="Ações"
+              aria-label="Ações"
+            >
+              Ações ▾
+            </button>
+          </div>
+        </td>
+      `;
+      highlightRowIfNeeded(tr, "unidades", u.id);
+      unidadesTbody.appendChild(tr);
+    }
+  }
+
+  async function loadOrganizacaoPage() {
+    showMsg("");
+    renderLoadingRow(organizacaoTbody, 3, "Carregando departamentos e cargos...");
+    try {
+      const [deps, cargos] = await Promise.all([request("/departamentos"), request("/cargos")]);
+      departamentosCache = Array.isArray(deps) ? deps : [];
+      cargosCache = Array.isArray(cargos) ? cargos : [];
+      renderOrganizacao();
+    } catch (err) {
+      renderEmptyRow(
+        organizacaoTbody,
+        3,
+        "Não foi possível carregar",
+        "Verifique a conexão com o servidor e tente novamente."
+      );
+      showMsg(err.message || "Falha ao carregar departamentos e cargos");
+    }
+  }
+
+  async function loadUnidadesPage() {
+    showMsg("");
+    if (unidadesTbody) renderLoadingRow(unidadesTbody, 4, "Carregando unidades...");
+    try {
+      const unidades = await request("/unidades");
+      unidadesCache = Array.isArray(unidades) ? unidades : [];
+      renderUnidades();
+    } catch (err) {
+      if (unidadesTbody) {
+        renderEmptyRow(
+          unidadesTbody,
+          4,
+          "Não foi possível carregar",
+          "Verifique a conexão com o servidor e tente novamente."
+        );
+      }
+      showMsg(err.message || "Falha ao carregar unidades");
+    }
+  }
+
+  function formatBrlRelatorio(n) {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(n) || 0);
+  }
+
+  function getRelatorioChartTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    return {
+      text: (cs.getPropertyValue("--text") || "#101828").trim(),
+      muted: (cs.getPropertyValue("--muted") || "#667085").trim(),
+      border: (cs.getPropertyValue("--border") || "#e4e7ec").trim(),
+    };
+  }
+
+  function destroyRelatoriosCharts() {
+    if (chartRelatorioDept) {
+      chartRelatorioDept.destroy();
+      chartRelatorioDept = null;
+    }
+    if (chartRelatorioStatus) {
+      chartRelatorioStatus.destroy();
+      chartRelatorioStatus = null;
+    }
+  }
+
+  function renderRelatoriosCharts(data) {
+    if (typeof Chart === "undefined" || !relatorioChartDepartamentosEl || !relatorioChartStatusEl) return;
+    const theme = getRelatorioChartTheme();
+    destroyRelatoriosCharts();
+
+    const porDepartamento = Array.isArray(data?.porDepartamento) ? data.porDepartamento : [];
+    const porStatus = Array.isArray(data?.porStatus) ? data.porStatus : [];
+
+    const deptRows = porDepartamento.filter((r) => Number(r.total_valor) > 0);
+    const deptLabels = deptRows.length ? deptRows.map((r) => String(r.departamento_nome || "—")) : ["Sem atribuições"];
+    const deptValues = deptRows.length ? deptRows.map((r) => Number(r.total_valor)) : [0];
+
+    chartRelatorioDept = new Chart(relatorioChartDepartamentosEl, {
+      type: "bar",
+      data: {
+        labels: deptLabels,
+        datasets: [
+          {
+            label: "Valor",
+            data: deptValues,
+            backgroundColor: "rgba(79, 124, 255, 0.5)",
+            borderColor: "rgba(79, 124, 255, 0.95)",
+            borderWidth: 1,
+            borderRadius: 6,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => formatBrlRelatorio(ctx.raw),
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: theme.muted, maxRotation: 40, minRotation: 0 },
+            grid: { color: theme.border, drawBorder: false },
+          },
+          y: {
+            ticks: {
+              color: theme.muted,
+              callback: (v) => formatBrlRelatorio(v),
+            },
+            grid: { color: theme.border },
+          },
+        },
+      },
+    });
+
+    function labelStatus(s) {
+      const x = String(s || "").trim().toLowerCase();
+      if (x === "disponivel") return "Disponível";
+      if (x === "em uso") return "Em uso";
+      return String(s || "—");
+    }
+
+    const statusRows = porStatus.filter((r) => Number(r.total_valor) > 0);
+    const statusLabels = statusRows.length ? statusRows.map((r) => labelStatus(r.status)) : ["Sem valor"];
+    const statusValues = statusRows.length ? statusRows.map((r) => Number(r.total_valor)) : [0];
+    const statusColors = statusRows.length
+      ? statusRows.map((r) => {
+          const x = String(r.status || "").trim().toLowerCase();
+          if (x === "disponivel") return "rgba(16, 185, 129, 0.75)";
+          if (x === "em uso") return "rgba(79, 124, 255, 0.75)";
+          return "rgba(148, 163, 184, 0.65)";
+        })
+      : ["rgba(148, 163, 184, 0.35)"];
+
+    chartRelatorioStatus = new Chart(relatorioChartStatusEl, {
+      type: "doughnut",
+      data: {
+        labels: statusLabels,
+        datasets: [
+          {
+            data: statusValues,
+            backgroundColor: statusColors,
+            borderWidth: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: theme.muted, padding: 12, usePointStyle: true },
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => formatBrlRelatorio(ctx.raw),
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function setupRelatoriosThemeObserver() {
+    if (relatoriosThemeObserver) return;
+    relatoriosThemeObserver = new MutationObserver(() => {
+      if (currentPage !== "relatorios" || !relatoriosDataCache) return;
+      renderRelatoriosCharts(relatoriosDataCache);
+    });
+    relatoriosThemeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  }
+
+  async function loadRelatoriosPage() {
+    showMsg("");
+    if (relatorioTotalInvestidoEl) relatorioTotalInvestidoEl.textContent = "…";
+    if (relatorioValorEmUsoEl) relatorioValorEmUsoEl.textContent = "…";
+    if (relatorioValorDisponivelEl) relatorioValorDisponivelEl.textContent = "…";
+    try {
+      const [resumo, porDepartamento, porStatus] = await Promise.all([
+        request("/relatorios/resumo"),
+        request("/relatorios/por-departamento"),
+        request("/relatorios/por-status"),
+      ]);
+      relatoriosDataCache = { resumo, porDepartamento, porStatus };
+      if (relatorioTotalInvestidoEl) {
+        relatorioTotalInvestidoEl.textContent = formatBrlRelatorio(resumo?.total_valor);
+      }
+      if (relatorioValorEmUsoEl) {
+        relatorioValorEmUsoEl.textContent = formatBrlRelatorio(resumo?.valor_em_uso);
+      }
+      if (relatorioValorDisponivelEl) {
+        relatorioValorDisponivelEl.textContent = formatBrlRelatorio(resumo?.valor_disponivel);
+      }
+      renderRelatoriosCharts(relatoriosDataCache);
+    } catch (err) {
+      relatoriosDataCache = null;
+      if (relatorioTotalInvestidoEl) relatorioTotalInvestidoEl.textContent = "—";
+      if (relatorioValorEmUsoEl) relatorioValorEmUsoEl.textContent = "—";
+      if (relatorioValorDisponivelEl) relatorioValorDisponivelEl.textContent = "—";
+      destroyRelatoriosCharts();
+      showMsg(err.message || "Falha ao carregar relatórios");
+    }
+  }
+
+  async function createDepartamentoFromOrganizacao() {
+    if (!canManageCriticalData()) {
+      showMsg("Acesso restrito a administradores.", "warning");
+      return;
+    }
+    const nome = await showPromptModal({
+      title: "Novo departamento",
+      message: "Informe o nome do departamento.",
+      initialValue: "",
+      placeholder: "Ex: TI",
+      confirmText: "Criar",
+      cancelText: "Cancelar",
+    });
+    if (nome == null) return;
+    const trimmed = String(nome || "").trim();
+    if (!trimmed) {
+      await showAlertModal({ title: "Nome inválido", message: "O nome do departamento não pode ser vazio." });
+      return;
+    }
+    showMsg("");
+    try {
+      if (organizacaoNewDepartamentoBtn) setButtonLoading(organizacaoNewDepartamentoBtn, true, "Criando...");
+      const created = await request("/departamentos", { method: "POST", body: { nome: normalizeTextCase(trimmed) } });
+      pendingRowHighlight.organizacao = created?.id ?? null;
+      showMsg("Departamento criado com sucesso.", "success");
+      await loadOrganizacaoPage();
+      await loadDepartamentos({ preserveSelection: true });
+    } catch (err) {
+      await showAlertModal({
+        title: "Não foi possível criar",
+        message: err.message || "Falha ao criar departamento",
+      });
+    } finally {
+      if (organizacaoNewDepartamentoBtn) setButtonLoading(organizacaoNewDepartamentoBtn, false);
+    }
+  }
+
   async function loadUsuarios() {
     showMsg("");
     if (!usuariosTbody) return;
@@ -2103,7 +3173,7 @@
 
   async function loadColaboradores() {
     showMsg("");
-    renderLoadingRow(colaboradoresTbody, 3, "Carregando colaboradores...");
+    renderLoadingRow(colaboradoresTbody, 5, "Carregando colaboradores...");
     try {
       const [metricsRows, paginated] = await Promise.all([
         request("/colaboradores"),
@@ -2132,7 +3202,7 @@
     } catch (err) {
       renderEmptyRow(
         colaboradoresTbody,
-        3,
+        5,
         "Não foi possível carregar",
         "Verifique a conexão com o servidor e tente novamente."
       );
@@ -2183,7 +3253,7 @@
 
   async function loadEquipamentos() {
     showMsg("");
-    renderLoadingRow(equipamentosTbody, 7, "Carregando equipamentos...");
+    renderLoadingRow(equipamentosTbody, 8, "Carregando equipamentos...");
     try {
       const [metricsRows, paginated] = await Promise.all([
         request("/equipamentos"),
@@ -2208,7 +3278,7 @@
     } catch (err) {
       renderEmptyRow(
         equipamentosTbody,
-        7,
+        8,
         "Não foi possível carregar",
         "Verifique a conexão com o servidor e tente novamente."
       );
@@ -2348,7 +3418,7 @@
 
   async function loadAtribuicoesPage() {
     showMsg("");
-    renderLoadingRow(atribuicoesTbody, 5, "Carregando atribuições...");
+    renderLoadingRow(atribuicoesTbody, 4, "Carregando atribuições...");
     try {
       const [colaboradores, equipamentos, atribuicoes, atribuicoesAtivas] = await Promise.all([
         request("/colaboradores"),
@@ -2391,7 +3461,7 @@
     } catch (err) {
       renderEmptyRow(
         atribuicoesTbody,
-        5,
+        4,
         "Não foi possível carregar",
         "As atribuições não puderam ser consultadas agora. Tente novamente em instantes."
       );
@@ -2574,6 +3644,31 @@
     showPage("atribuicoes");
     closeSidebar();
   });
+
+  organizacaoNewDepartamentoBtn?.addEventListener("click", () => {
+    void createDepartamentoFromOrganizacao();
+  });
+  unidadesNewBtn?.addEventListener("click", () => {
+    void openUnidadeCreateModal();
+  });
+
+  unidadeCreateEstado?.addEventListener("change", () => {
+    void onUnidadeCreateEstadoChange();
+  });
+
+  unidadeCreateForm?.addEventListener("submit", (e) => {
+    void handleUnidadeCreateFormSubmit(e);
+  });
+  unidadeCreateBtnCancel?.addEventListener("click", () => closeUnidadeCreateModal());
+  unidadeCreateModalClose?.addEventListener("click", () => closeUnidadeCreateModal());
+  unidadeCreateModal?.addEventListener("mousedown", (e) => {
+    if (e.target === unidadeCreateModal) closeUnidadeCreateModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !unidadeCreateModal || unidadeCreateModal.hidden) return;
+    e.preventDefault();
+    closeUnidadeCreateModal();
+  });
   activityList?.addEventListener("click", (event) => {
     const trigger = event.target.closest(".saas-activity[data-activity-query]");
     if (!trigger) return;
@@ -2695,12 +3790,24 @@
     if (atribuicoesCurrentPage >= atribuicoesTotalPages) return;
     await loadAtribuicoesListPage(atribuicoesCurrentPage + 1, "next");
   });
-  colaboradorNewBtn?.addEventListener("click", () => {
+  colaboradorNewBtn?.addEventListener("click", async () => {
     if (!canManageCriticalData()) {
       showMsg("Você não tem permissão para cadastrar colaboradores.", "warning");
       return;
     }
     const shouldOpen = colaboradorFormPanel?.hidden ?? true;
+    if (shouldOpen) {
+      colaboradorEditingId = null;
+      const head = colaboradorFormPanel?.querySelector(".saas-drawer-head strong");
+      const sub = colaboradorFormPanel?.querySelector(".saas-drawer-head span");
+      if (head) head.textContent = "Novo colaborador";
+      if (sub) sub.textContent = "Cadastre rapidamente um novo membro da equipe com os dados principais.";
+      const submitLabel = colaboradorForm?.querySelector("button[type='submit']");
+      if (submitLabel) submitLabel.textContent = "Cadastrar colaborador";
+      resetForm(colaboradorForm);
+      await loadUnidades({ preserveSelection: false });
+      void loadCargosForDepartamento(null);
+    }
     setColaboradorFormOpen(shouldOpen);
     if (shouldOpen) focusFirstField(colaboradorForm);
   });
@@ -2714,22 +3821,96 @@
       startEquipamentoCreate();
       return;
     }
+    resetEquipamentoForm();
     setEquipamentoFormOpen(false);
   });
   atribuicaoNewBtn?.addEventListener("click", () => {
     const shouldOpen = atribuicaoFormPanel?.hidden ?? true;
+    resetForm(atribuirForm);
     setAtribuicaoFormOpen(shouldOpen);
     if (shouldOpen) focusFirstField(atribuirForm);
   });
 
   departamentoSelect?.addEventListener("change", () => {
-    const depId = departamentoSelect.value ? Number(departamentoSelect.value) : null;
-    void loadCargosForDepartamento(depId, { preserveSelection: false });
-    const canManage = canManageCriticalData();
-    if (cargoAddBtn) {
-      cargoAddBtn.disabled =
-        !canManage || !depId || !Number.isInteger(depId) || depId <= 0;
+    const raw = String(departamentoSelect.value || "");
+    if (raw === "__create_departamento__") {
+      void (async () => {
+        const nome = await showPromptModal({
+          title: "Novo departamento",
+          message: "Informe o nome do departamento.",
+          initialValue: "",
+          placeholder: "Ex: TI",
+          confirmText: "Criar",
+          cancelText: "Cancelar",
+        });
+        if (nome == null) {
+          await loadDepartamentos({ preserveSelection: false });
+          return;
+        }
+        const trimmed = String(nome || "").trim();
+        if (!trimmed) {
+          await showAlertModal({ title: "Nome inválido", message: "O nome do departamento não pode ser vazio." });
+          await loadDepartamentos({ preserveSelection: false });
+          return;
+        }
+        try {
+          const created = await request("/departamentos", {
+            method: "POST",
+            body: { nome: normalizeTextCase(trimmed) },
+          });
+          await loadDepartamentos({ preserveSelection: false, selectId: created?.id ?? null });
+          const depId = created?.id ? Number(created.id) : null;
+          await loadCargosForDepartamento(depId, { preserveSelection: false });
+        } catch (err) {
+          await showAlertModal({ title: "Não foi possível criar", message: err.message || "Falha ao criar departamento" });
+          await loadDepartamentos({ preserveSelection: false });
+          await loadCargosForDepartamento(null);
+        }
+      })();
+      return;
     }
+
+    const depId = raw ? Number(raw) : null;
+    void loadCargosForDepartamento(depId, { preserveSelection: false });
+  });
+
+  cargoSelect?.addEventListener("change", () => {
+    const raw = String(cargoSelect.value || "");
+    if (raw !== "__create_cargo__") return;
+    const depId = Number(departamentoSelect?.value);
+    if (!Number.isInteger(depId) || depId <= 0) return;
+    void (async () => {
+      const nome = await showPromptModal({
+        title: "Novo cargo",
+        message: "Informe o nome do cargo.",
+        initialValue: "",
+        placeholder: "Ex: Desenvolvedor",
+        confirmText: "Criar",
+        cancelText: "Cancelar",
+      });
+      if (nome == null) {
+        await loadCargosForDepartamento(depId, { preserveSelection: false });
+        return;
+      }
+      const trimmed = String(nome || "").trim();
+      if (!trimmed) {
+        await showAlertModal({ title: "Nome inválido", message: "O nome do cargo não pode ser vazio." });
+        await loadCargosForDepartamento(depId, { preserveSelection: false });
+        return;
+      }
+      try {
+        const created = await request("/cargos", {
+          method: "POST",
+          body: { nome: normalizeTextCase(trimmed), departamento_id: depId },
+        });
+        await loadCargosForDepartamento(depId, { preserveSelection: false, selectId: created?.id ?? null });
+        validateField(cargoSelect, { forceTouch: true });
+        showMsg("Cargo criado com sucesso.", "success");
+      } catch (err) {
+        await showAlertModal({ title: "Não foi possível criar", message: err.message || "Falha ao criar cargo" });
+        await loadCargosForDepartamento(depId, { preserveSelection: false });
+      }
+    })();
   });
 
   colaboradorForm?.addEventListener("submit", async (e) => {
@@ -2760,104 +3941,35 @@
     const submitBtn = e.submitter || colaboradorForm.querySelector("button[type='submit']");
     const payload = {
       nome: normalizeTextCase(document.getElementById("nome").value.trim()),
-      cpf: document.getElementById("cpf").value.trim(),
+      documento: digitsOnly(document.getElementById("documento")?.value),
       cargo_id: cargoNum,
       departamento_id: depNum,
+      unidade_id: Number(unidadeSelect?.value || ""),
+      unidade: String(unidadeSelect?.selectedOptions?.[0]?.textContent || "").trim(),
     };
     try {
       setButtonLoading(submitBtn, true, "Salvando...");
-      const created = await request("/colaboradores", { method: "POST", body: payload });
-      pendingRowHighlight.colaboradores = created?.id ?? null;
-      showMsg("Colaborador cadastrado com sucesso.", "success");
-      colaboradorForm.reset();
-      resetFormState(colaboradorForm);
-      await loadCargosForDepartamento(null);
+      const isEditing = Number.isInteger(Number(colaboradorEditingId)) && Number(colaboradorEditingId) > 0;
+      const created = isEditing
+        ? await request(`/colaboradores/${encodeURIComponent(colaboradorEditingId)}`, { method: "PATCH", body: payload })
+        : await request("/colaboradores", { method: "POST", body: payload });
+      pendingRowHighlight.colaboradores = isEditing ? colaboradorEditingId : created?.id ?? null;
+      showMsg(isEditing ? "Colaborador atualizado com sucesso." : "Colaborador cadastrado com sucesso.", "success");
+      colaboradorEditingId = null;
       setColaboradorFormOpen(false);
       resetColaboradoresFiltersState();
       await loadColaboradores();
       await refreshStatsAndActivities();
       focusField(colaboradoresSearch);
     } catch (err) {
-      showMsg(err.message || "Falha ao cadastrar colaborador");
+      showMsg(err.message || (colaboradorEditingId ? "Falha ao atualizar colaborador" : "Falha ao cadastrar colaborador"));
     } finally {
       setButtonLoading(submitBtn, false);
     }
   });
 
-  cargoAddBtn?.addEventListener("click", async () => {
-    if (!canManageCriticalData()) {
-      showMsg("Você não tem permissão para cadastrar cargos.", "warning");
-      return;
-    }
-    const depId = Number(departamentoSelect?.value);
-    if (!Number.isInteger(depId) || depId <= 0) {
-      showMsg("Selecione um departamento", "warning");
-      validateField(departamentoSelect, { forceTouch: true });
-      return;
-    }
-    const nome = String(cargoNovoInput?.value || "").trim();
-    if (!nome) {
-      showMsg("Informe o nome do cargo para adicionar.", "warning");
-      return;
-    }
-    showMsg("");
-    try {
-      setButtonLoading(cargoAddBtn, true, "Adicionando...");
-      const created = await request("/cargos", {
-        method: "POST",
-        body: { nome: normalizeTextCase(nome), departamento_id: depId },
-      });
-      if (cargoNovoInput) cargoNovoInput.value = "";
-      await loadCargosForDepartamento(depId, {
-        preserveSelection: false,
-        selectId: created?.id ?? null,
-      });
-      validateField(cargoSelect, { forceTouch: true });
-      showMsg("Cargo cadastrado com sucesso.", "success");
-    } catch (err) {
-      showMsg(err.message || "Falha ao cadastrar cargo");
-    } finally {
-      setButtonLoading(cargoAddBtn, false);
-    }
-  });
-
-  departamentoAddBtn?.addEventListener("click", async () => {
-    if (!canManageCriticalData()) {
-      showMsg("Você não tem permissão para cadastrar departamentos.", "warning");
-      return;
-    }
-    const nome = String(departamentoNovoInput?.value || "").trim();
-    if (!nome) {
-      showMsg("Informe o nome do departamento para adicionar.", "warning");
-      return;
-    }
-    showMsg("");
-    try {
-      setButtonLoading(departamentoAddBtn, true, "Adicionando...");
-      const created = await request("/departamentos", {
-        method: "POST",
-        body: { nome: normalizeTextCase(nome) },
-      });
-      if (departamentoNovoInput) departamentoNovoInput.value = "";
-      const newId = created?.id ?? null;
-      await loadDepartamentos({
-        preserveSelection: false,
-        selectId: newId,
-      });
-      if (newId != null) {
-        await loadCargosForDepartamento(Number(newId), {
-          preserveSelection: false,
-          selectId: null,
-        });
-      }
-      validateField(departamentoSelect, { forceTouch: true });
-      showMsg("Departamento criado com sucesso", "success");
-    } catch (err) {
-      showMsg(err.message || "Falha ao cadastrar departamento");
-    } finally {
-      setButtonLoading(departamentoAddBtn, false);
-    }
-  });
+  // Criação de departamentos/cargos agora é feita via opção "+ Criar..." nos selects,
+  // ou pela aba "Departamentos & Cargos" (Organização).
 
   equipamentoForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -2873,12 +3985,14 @@
     const submitBtn = e.submitter || equipamentoForm.querySelector("button[type='submit']");
     const equipamentoId = Number(equipamentoIdInput?.value || 0);
     const isEditing = Number.isInteger(equipamentoId) && equipamentoId > 0;
+    const valorEl = document.getElementById("eq_valor");
     const payload = {
       nome: normalizeTextCase(document.getElementById("eq_nome").value.trim()),
       serial: String(document.getElementById("eq_serial").value || "").trim(),
       modelo: normalizeTextCase(document.getElementById("eq_modelo").value.trim()),
       marca: normalizeTextCase(document.getElementById("eq_marca").value.trim()),
       observacoes: String(document.getElementById("eq_observacoes").value || "").trim(),
+      valor: moedaParaNumero(valorEl?.value),
       status: document.getElementById("eq_status").value,
     };
     try {
@@ -2931,8 +4045,7 @@
         count > 1 ? `Atribuição realizada com sucesso para ${count} equipamentos.` : "Atribuição realizada com sucesso.",
         "success"
       );
-      atribuirForm.reset();
-      resetFormState(atribuirForm);
+      resetForm(atribuirForm);
       setAtribuicaoFormOpen(false);
       if (atribuicoesSearch) atribuicoesSearch.value = "";
       if (atribuicoesStatusFilter) atribuicoesStatusFilter.value = "ativo";
@@ -3038,6 +4151,19 @@
     }
   });
 
+  atribuicoesTbody?.addEventListener("click", (e) => {
+    const toggleBtn = e.target.closest("[data-action='toggle-atribuicoes']");
+    if (!toggleBtn) return;
+    const key = String(toggleBtn.dataset.colaboradorKey || "").trim();
+    if (!key) return;
+    const detailsRow = atribuicoesTbody.querySelector(
+      `.atribuicoes-details-row[data-colaborador-key="${CSS.escape(key)}"]`
+    );
+    if (!detailsRow) return;
+    detailsRow.hidden = !detailsRow.hidden;
+    toggleBtn.textContent = detailsRow.hidden ? "Ver atribuições" : "Ocultar atribuições";
+  });
+
   usuariosTbody?.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action='toggle-user-perfil']");
     if (!btn || btn.disabled) return;
@@ -3072,6 +4198,575 @@
     }
   });
 
+  function closeGlobalDropdown() {
+    if (!globalDropdown) return;
+    globalDropdown.hidden = true;
+    globalDropdown.innerHTML = "";
+    globalDropdown.style.left = "-9999px";
+    globalDropdown.style.top = "-9999px";
+    globalDropdownAnchor = null;
+    globalDropdownContext = null;
+  }
+
+  function positionGlobalDropdown() {
+    if (!globalDropdown || globalDropdown.hidden || !globalDropdownAnchor) return;
+    const rect = globalDropdownAnchor.getBoundingClientRect();
+    const margin = 8;
+    const maxW = Math.min(320, window.innerWidth - margin * 2);
+    globalDropdown.style.minWidth = "220px";
+    globalDropdown.style.maxWidth = `${maxW}px`;
+
+    const ddRect = globalDropdown.getBoundingClientRect();
+    let left = rect.right - ddRect.width;
+    let top = rect.bottom + 8;
+
+    left = Math.max(margin, Math.min(left, window.innerWidth - ddRect.width - margin));
+    if (top + ddRect.height > window.innerHeight - margin) {
+      top = rect.top - ddRect.height - 8;
+    }
+    top = Math.max(margin, Math.min(top, window.innerHeight - ddRect.height - margin));
+
+    globalDropdown.style.left = `${Math.round(left)}px`;
+    globalDropdown.style.top = `${Math.round(top)}px`;
+  }
+
+  function openGlobalDropdown({ anchorEl, items, context }) {
+    if (!globalDropdown || !anchorEl) return;
+    globalDropdownAnchor = anchorEl;
+    globalDropdownContext = context || null;
+
+    globalDropdown.innerHTML = items
+      .map(
+        (it) => `
+          <button
+            type="button"
+            class="saas-dropdown-item ${it.danger ? "is-danger" : ""}"
+            data-dd-action="${escapeHtml(it.action)}"
+          >${escapeHtml(it.label)}</button>
+        `
+      )
+      .join("");
+
+    globalDropdown.hidden = false;
+    positionGlobalDropdown();
+  }
+
+  async function handleGlobalDropdownAction(action, ctx) {
+    if (!ctx || !ctx.type) return;
+
+    if (ctx.type === "colaborador") {
+      const colaboradorId = Number(ctx.id);
+      const colaborador = (colaboradoresCache || []).find((c) => Number(c.id) === colaboradorId);
+      if (!colaborador) return;
+
+      if (action === "edit") {
+      colaboradorEditingId = colaboradorId;
+      const head = colaboradorFormPanel?.querySelector(".saas-drawer-head strong");
+      const sub = colaboradorFormPanel?.querySelector(".saas-drawer-head span");
+      if (head) head.textContent = "Editar colaborador";
+      if (sub) sub.textContent = "Atualize os dados do colaborador e salve as alterações.";
+      const submitLabel = colaboradorForm?.querySelector("button[type='submit']");
+      if (submitLabel) submitLabel.textContent = "Salvar alterações";
+
+      const nomeEl = document.getElementById("nome");
+      const documentoEl = document.getElementById("documento");
+      if (nomeEl) nomeEl.value = String(colaborador.nome || "");
+      if (documentoEl) {
+        documentoEl.value = formatDocumentoMask(colaborador.documento || colaborador.cpf || "");
+        updateDocumentoHintUi();
+      }
+      await loadUnidades({ preserveSelection: false, selectId: colaborador.unidade_id || null });
+      if (unidadeSelect) {
+        if (colaborador.unidade_id != null) {
+          unidadeSelect.value = String(colaborador.unidade_id || "");
+        } else if (colaborador.unidade) {
+          const targetNome = String(colaborador.unidade || "").trim();
+          const opt = Array.from(unidadeSelect.options).find((o) => {
+            const id = Number(o.value);
+            if (!Number.isInteger(id) || id <= 0) return false;
+            const u = unidadesCache.find((x) => Number(x.id) === id);
+            if (!u) return false;
+            const label = formatUnidadeDisplayLabel(u);
+            return (
+              String(o.textContent || "").trim() === targetNome ||
+              String(u.nome || "").trim() === targetNome ||
+              label === targetNome
+            );
+          });
+          if (opt) unidadeSelect.value = String(opt.value || "");
+        }
+      }
+
+      if (colaborador.departamento_id) {
+        await loadDepartamentos({ preserveSelection: false, selectId: colaborador.departamento_id });
+        await loadCargosForDepartamento(Number(colaborador.departamento_id), {
+          preserveSelection: false,
+          selectId: colaborador.cargo_id || null,
+        });
+      } else {
+        await loadDepartamentos({ preserveSelection: true });
+        await loadCargosForDepartamento(null);
+      }
+
+      setColaboradorFormOpen(true);
+      focusFirstField(colaboradorForm);
+      return;
+      }
+
+      if (action === "delete") {
+      const confirmedDelete = await showConfirmModal({
+        title: "Excluir colaborador",
+        message:
+          "Tem certeza que deseja excluir este colaborador?\n\nEssa ação não pode ser desfeita.",
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+      });
+      if (!confirmedDelete) return;
+
+      showMsg("");
+      const anchor = document.querySelector(
+        `[data-action='open-colaborador-menu'][data-colaborador-id='${CSS.escape(String(colaboradorId))}']`
+      );
+      try {
+        setButtonLoading(anchor, true, "Excluindo...");
+        await request(`/colaboradores/${encodeURIComponent(colaboradorId)}`, { method: "DELETE" });
+        showMsg("Colaborador excluído com sucesso.", "success");
+        await loadColaboradores();
+        await refreshStatsAndActivities();
+      } catch (err) {
+        await showAlertModal({
+          title: "Não foi possível excluir",
+          message: err.message || "Falha ao excluir colaborador",
+        });
+      } finally {
+        setButtonLoading(anchor, false);
+      }
+      }
+      return;
+    }
+
+    if (ctx.type === "departamento") {
+      const depId = Number(ctx.id);
+      const dep = (departamentosCache || []).find((d) => Number(d.id) === depId);
+      if (!dep) return;
+
+      if (action === "edit") {
+        const nextName = await showPromptModal({
+          title: "Editar departamento",
+          message: "Atualize o nome do departamento.",
+          initialValue: String(dep.nome || "").trim(),
+          placeholder: "Nome do departamento",
+          confirmText: "Salvar",
+          cancelText: "Cancelar",
+        });
+        if (nextName == null) return;
+        showMsg("");
+        try {
+          await request(`/departamentos/${encodeURIComponent(depId)}`, {
+            method: "PATCH",
+            body: { nome: nextName },
+          });
+          showMsg("Departamento atualizado com sucesso.", "success");
+          await loadOrganizacaoPage();
+          await loadDepartamentos({ preserveSelection: true });
+        } catch (err) {
+          await showAlertModal({
+            title: "Não foi possível atualizar",
+            message: err.message || "Falha ao atualizar departamento",
+          });
+        }
+        return;
+      }
+
+      if (action === "delete") {
+        const confirmed = await showConfirmModal({
+          title: "Excluir departamento",
+          message: `Tem certeza que deseja excluir "${String(dep.nome || "").trim()}"?\nEssa ação só é permitida se não houver cargos/colaboradores vinculados.`,
+          confirmText: "Excluir",
+          cancelText: "Cancelar",
+        });
+        if (!confirmed) return;
+        showMsg("");
+        try {
+          await request(`/departamentos/${encodeURIComponent(depId)}`, { method: "DELETE" });
+          showMsg("Departamento excluído com sucesso.", "success");
+          await loadOrganizacaoPage();
+          await loadDepartamentos({ preserveSelection: true });
+        } catch (err) {
+          await showAlertModal({
+            title: "Não foi possível excluir",
+            message: err.message || "Falha ao excluir departamento",
+          });
+        }
+      }
+      return;
+    }
+
+    if (ctx.type === "cargo") {
+      const cargoId = Number(ctx.id);
+      const cargo = (cargosCache || []).find((c) => Number(c.id) === cargoId);
+      if (!cargo) return;
+
+      if (action === "edit") {
+        const nextName = await showPromptModal({
+          title: "Editar cargo",
+          message: "Atualize o nome do cargo.",
+          initialValue: String(cargo.nome || "").trim(),
+          placeholder: "Nome do cargo",
+          confirmText: "Salvar",
+          cancelText: "Cancelar",
+        });
+        if (nextName == null) return;
+        showMsg("");
+        try {
+          await request(`/cargos/${encodeURIComponent(cargoId)}`, {
+            method: "PATCH",
+            body: { nome: nextName },
+          });
+          showMsg("Cargo atualizado com sucesso.", "success");
+          await loadOrganizacaoPage();
+          const depVal = departamentoSelect?.value ? Number(departamentoSelect.value) : null;
+          await loadCargosForDepartamento(depVal, { preserveSelection: true });
+        } catch (err) {
+          await showAlertModal({
+            title: "Não foi possível atualizar",
+            message: err.message || "Falha ao atualizar cargo",
+          });
+        }
+        return;
+      }
+
+      if (action === "delete") {
+        const confirmed = await showConfirmModal({
+          title: "Excluir cargo",
+          message: `Tem certeza que deseja excluir "${String(cargo.nome || "").trim()}"?\nEssa ação só é permitida se não houver colaboradores vinculados.`,
+          confirmText: "Excluir",
+          cancelText: "Cancelar",
+        });
+        if (!confirmed) return;
+        showMsg("");
+        try {
+          await request(`/cargos/${encodeURIComponent(cargoId)}`, { method: "DELETE" });
+          showMsg("Cargo excluído com sucesso.", "success");
+          await loadOrganizacaoPage();
+          const depVal = departamentoSelect?.value ? Number(departamentoSelect.value) : null;
+          await loadCargosForDepartamento(depVal, { preserveSelection: true });
+        } catch (err) {
+          await showAlertModal({
+            title: "Não foi possível excluir",
+            message: err.message || "Falha ao excluir cargo",
+          });
+        }
+      }
+    }
+
+    if (ctx.type === "unidade") {
+      const unidadeId = Number(ctx.id);
+      const unidade = (unidadesCache || []).find((u) => Number(u.id) === unidadeId);
+      if (!unidade) return;
+
+      const parseTipo = (v) => {
+        const x = String(v || "").trim().toLowerCase();
+        return x === "filial" ? "filial" : "matriz";
+      };
+      const parseAtivo = (v) => {
+        const x = String(v || "").trim().toLowerCase();
+        return ["0", "false", "não", "nao", "inativo", "inativa"].includes(x) ? 0 : 1;
+      };
+
+      if (action === "edit") {
+        const nextNome = await showPromptModal({
+          title: "Editar unidade",
+          message: "Atualize o nome da unidade.",
+          initialValue: String(unidade.nome || "").trim(),
+          placeholder: "Nome da unidade",
+          confirmText: "Salvar",
+          cancelText: "Cancelar",
+        });
+        if (nextNome == null) return;
+
+        const nextTipo = await showPromptModal({
+          title: "Tipo da unidade",
+          message: "Digite 'matriz' ou 'filial'.",
+          initialValue: String(unidade.tipo || "matriz").trim(),
+          placeholder: "matriz ou filial",
+          confirmText: "Continuar",
+          cancelText: "Cancelar",
+        });
+        if (nextTipo == null) return;
+
+        const nextCidade = await showPromptModal({
+          title: "Cidade",
+          message: "Atualize a cidade (ou use '—').",
+          initialValue: String(unidade.cidade || "").trim() || "—",
+          placeholder: "Ex: Bebedouro",
+          confirmText: "Continuar",
+          cancelText: "Cancelar",
+        });
+        if (nextCidade == null) return;
+
+        const nextEstado = await showPromptModal({
+          title: "Estado",
+          message: "Atualize o estado (ou use '—').",
+          initialValue: String(unidade.estado || "").trim() || "—",
+          placeholder: "Ex: SP",
+          confirmText: "Salvar",
+          cancelText: "Cancelar",
+        });
+        if (nextEstado == null) return;
+
+        const nextAtivo = await showPromptModal({
+          title: "Ativo?",
+          message: "Digite 'sim' para ativa ou 'não' para inativa.",
+          initialValue: Number(unidade.ativo) === 0 ? "não" : "sim",
+          placeholder: "sim ou não",
+          confirmText: "Salvar",
+          cancelText: "Cancelar",
+        });
+        if (nextAtivo == null) return;
+
+        showMsg("");
+        try {
+          await request(`/unidades/${encodeURIComponent(unidadeId)}`, {
+            method: "PATCH",
+            body: {
+              nome: nextNome,
+              tipo: parseTipo(nextTipo),
+              cidade: nextCidade,
+              estado: nextEstado,
+              ativo: parseAtivo(nextAtivo),
+            },
+          });
+          showMsg("Unidade atualizada com sucesso.", "success");
+          await loadUnidadesPage();
+          await loadUnidades({ preserveSelection: true });
+        } catch (err) {
+          await showAlertModal({
+            title: "Não foi possível atualizar",
+            message: err.message || "Falha ao atualizar unidade",
+          });
+        }
+        return;
+      }
+
+      if (action === "delete") {
+        const confirmed = await showConfirmModal({
+          title: "Excluir unidade",
+          message: `Tem certeza que deseja excluir "${formatUnidadeDisplayLabel(unidade)}"?\nEssa ação será bloqueada se houver colaboradores vinculados.`,
+          confirmText: "Excluir",
+          cancelText: "Cancelar",
+        });
+        if (!confirmed) return;
+
+        showMsg("");
+        try {
+          await request(`/unidades/${encodeURIComponent(unidadeId)}`, { method: "DELETE" });
+          showMsg("Unidade excluída com sucesso.", "success");
+          await loadUnidadesPage();
+          await loadUnidades({ preserveSelection: true });
+        } catch (err) {
+          await showAlertModal({
+            title: "Não foi possível excluir",
+            message: err.message || "Falha ao excluir unidade",
+          });
+        }
+      }
+    }
+  }
+
+  globalDropdown?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-dd-action]");
+    if (!btn) return;
+    e.preventDefault();
+    const action = String(btn.dataset.ddAction || "");
+    const ctx = globalDropdownContext;
+    closeGlobalDropdown();
+    void handleGlobalDropdownAction(action, ctx);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!globalDropdown || globalDropdown.hidden) return;
+    const insideDropdown = e.target.closest("#globalDropdown");
+    const insideAnchor =
+      globalDropdownAnchor &&
+      e.target.closest(
+        "[data-action='open-colaborador-menu'], [data-action='dep-actions'], [data-action='cargo-actions'], [data-action='unidade-actions']"
+      );
+    if (!insideDropdown && !insideAnchor) closeGlobalDropdown();
+  });
+
+  window.addEventListener("scroll", () => positionGlobalDropdown(), true);
+  window.addEventListener("resize", () => positionGlobalDropdown());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && globalDropdown && !globalDropdown.hidden) {
+      e.preventDefault();
+      closeGlobalDropdown();
+    }
+  });
+
+  colaboradoresTbody?.addEventListener("click", async (e) => {
+    const openBtn = e.target.closest("[data-action='open-colaborador-menu']");
+    if (openBtn) {
+      if (!canManageCriticalData()) {
+        showMsg("Você não tem permissão para gerenciar colaboradores.", "warning");
+        return;
+      }
+      const colaboradorId = Number(openBtn.dataset.colaboradorId);
+      if (!Number.isInteger(colaboradorId) || colaboradorId <= 0) return;
+      if (globalDropdown && !globalDropdown.hidden && globalDropdownAnchor === openBtn) {
+        closeGlobalDropdown();
+        return;
+      }
+      openGlobalDropdown({
+        anchorEl: openBtn,
+        context: { type: "colaborador", id: colaboradorId },
+        items: [
+          { action: "edit", label: "Editar colaborador" },
+          { action: "delete", label: "Excluir colaborador", danger: true },
+        ],
+      });
+      return;
+    }
+  });
+
+  organizacaoTbody?.addEventListener("click", async (e) => {
+    const createCargoBtn = e.target.closest("[data-action='create-cargo']");
+    if (createCargoBtn) {
+      if (!canManageCriticalData()) {
+        showMsg("Acesso restrito a administradores.", "warning");
+        return;
+      }
+      const depId = Number(createCargoBtn.dataset.depId);
+      if (!Number.isInteger(depId) || depId <= 0) return;
+      const dep = (departamentosCache || []).find((d) => Number(d.id) === depId);
+      const depName = String(dep?.nome || "").trim() || "este departamento";
+
+      const nome = await showPromptModal({
+        title: "Novo cargo",
+        message: `Informe o nome do cargo para ${depName}.`,
+        initialValue: "",
+        placeholder: "Ex: Desenvolvedor",
+        confirmText: "Criar",
+        cancelText: "Cancelar",
+      });
+      if (nome == null) return;
+      const trimmed = String(nome || "").trim();
+      if (!trimmed) {
+        await showAlertModal({ title: "Nome inválido", message: "O nome do cargo não pode ser vazio." });
+        return;
+      }
+
+      showMsg("");
+      try {
+        setButtonLoading(createCargoBtn, true, "Criando...");
+        const created = await request("/cargos", {
+          method: "POST",
+          body: { nome: normalizeTextCase(trimmed), departamento_id: depId },
+        });
+        pendingCargoHighlightId = created?.id ?? null;
+        showMsg("Cargo criado com sucesso.", "success");
+        await loadOrganizacaoPage();
+
+        // reabrir a lista do departamento após recarregar
+        const detailsRow = organizacaoTbody.querySelector(
+          `.atribuicoes-details-row[data-dep-id="${CSS.escape(String(depId))}"]`
+        );
+        if (detailsRow) detailsRow.hidden = false;
+      } catch (err) {
+        await showAlertModal({
+          title: "Não foi possível criar",
+          message: err.message || "Falha ao criar cargo",
+        });
+      } finally {
+        setButtonLoading(createCargoBtn, false);
+      }
+      return;
+    }
+
+    const toggleBtn = e.target.closest("[data-action='toggle-dep-cargos']");
+    if (toggleBtn) {
+      const depId = String(toggleBtn.dataset.depId || "").trim();
+      if (!depId) return;
+      const detailsRow = organizacaoTbody.querySelector(
+        `.atribuicoes-details-row[data-dep-id="${CSS.escape(depId)}"]`
+      );
+      if (!detailsRow) return;
+      detailsRow.hidden = !detailsRow.hidden;
+      toggleBtn.textContent = detailsRow.hidden ? "Ver cargos" : "Ocultar cargos";
+      return;
+    }
+
+    const depActions = e.target.closest("[data-action='dep-actions']");
+    if (depActions) {
+      if (!canManageCriticalData()) {
+        showMsg("Acesso restrito a administradores.", "warning");
+        return;
+      }
+      const depId = Number(depActions.dataset.depId);
+      if (!Number.isInteger(depId) || depId <= 0) return;
+      if (globalDropdown && !globalDropdown.hidden && globalDropdownAnchor === depActions) {
+        closeGlobalDropdown();
+        return;
+      }
+      openGlobalDropdown({
+        anchorEl: depActions,
+        context: { type: "departamento", id: depId },
+        items: [
+          { action: "edit", label: "Editar" },
+          { action: "delete", label: "Excluir", danger: true },
+        ],
+      });
+      return;
+    }
+
+    const cargoActions = e.target.closest("[data-action='cargo-actions']");
+    if (cargoActions) {
+      if (!canManageCriticalData()) {
+        showMsg("Acesso restrito a administradores.", "warning");
+        return;
+      }
+      const cargoId = Number(cargoActions.dataset.cargoId);
+      if (!Number.isInteger(cargoId) || cargoId <= 0) return;
+      if (globalDropdown && !globalDropdown.hidden && globalDropdownAnchor === cargoActions) {
+        closeGlobalDropdown();
+        return;
+      }
+      openGlobalDropdown({
+        anchorEl: cargoActions,
+        context: { type: "cargo", id: cargoId },
+        items: [
+          { action: "edit", label: "Editar" },
+          { action: "delete", label: "Excluir", danger: true },
+        ],
+      });
+    }
+  });
+
+  unidadesTbody?.addEventListener("click", (e) => {
+    const unidadeActions = e.target.closest("[data-action='unidade-actions']");
+    if (!unidadeActions) return;
+    if (!canManageCriticalData()) {
+      showMsg("Acesso restrito a administradores.", "warning");
+      return;
+    }
+    const unidadeId = Number(unidadeActions.dataset.unidadeId);
+    if (!Number.isInteger(unidadeId) || unidadeId <= 0) return;
+
+    if (globalDropdown && !globalDropdown.hidden && globalDropdownAnchor === unidadeActions) {
+      closeGlobalDropdown();
+      return;
+    }
+
+    openGlobalDropdown({
+      anchorEl: unidadeActions,
+      context: { type: "unidade", id: unidadeId },
+      items: [
+        { action: "edit", label: "Editar" },
+        { action: "delete", label: "Excluir", danger: true },
+      ],
+    });
+  });
+
   window.addEventListener("popstate", () => {
     const state = hydrateStateFromUrl();
     if (state.view === currentPage) {
@@ -3096,6 +4791,7 @@
       : null;
     await loadCargosForDepartamento(initDep, { preserveSelection: false });
     applyAdminVisibility();
+    setupRelatoriosThemeObserver();
     const state = hydrateStateFromUrl();
     showPage(state.view, { syncUrl: false, replaceHistory: true });
   });

@@ -3,7 +3,7 @@
   let pendingResolve = null;
   let focusBeforeOpen = null;
   let confirmAction = () => {};
-  /** @type {"confirm" | "alert"} */
+  /** @type {"confirm" | "alert" | "prompt"} */
   let modalKind = "confirm";
 
   function finish(result) {
@@ -19,6 +19,8 @@
       overlayEl.hidden = true;
       if (modalKind === "alert") {
         resolve();
+      } else if (modalKind === "prompt") {
+        resolve(result === undefined ? null : result);
       } else {
         resolve(Boolean(result));
       }
@@ -62,6 +64,10 @@
         <div class="app-modal-inner">
           <h2 id="appModalTitle" class="app-modal-title"></h2>
           <p id="appModalMessage" class="app-modal-message"></p>
+          <div class="app-modal-input-wrap" hidden>
+            <input id="appModalInput" class="app-modal-input" />
+            <div class="app-modal-input-hint" id="appModalInputHint" hidden></div>
+          </div>
           <div class="app-modal-actions">
             <button type="button" class="saas-btn saas-btn-ghost app-modal-btn-cancel"></button>
             <button type="button" class="saas-btn primary app-modal-btn-confirm"></button>
@@ -78,7 +84,7 @@
 
     overlayEl.addEventListener("mousedown", (e) => {
       if (e.target === overlayEl) {
-        finish(modalKind === "alert" ? undefined : false);
+        finish(modalKind === "alert" ? undefined : modalKind === "prompt" ? null : false);
       }
     });
 
@@ -94,7 +100,7 @@
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        finish(modalKind === "alert" ? undefined : false);
+        finish(modalKind === "alert" ? undefined : modalKind === "prompt" ? null : false);
       }
     });
 
@@ -132,6 +138,8 @@
 
     overlayEl.querySelector("#appModalTitle").textContent = title;
     overlayEl.querySelector("#appModalMessage").textContent = message;
+    const inputWrap = overlayEl.querySelector(".app-modal-input-wrap");
+    if (inputWrap) inputWrap.hidden = true;
     btnCancel.textContent = cancelText;
     btnConfirm.textContent = confirmText;
 
@@ -189,6 +197,8 @@
 
     overlayEl.querySelector("#appModalTitle").textContent = title;
     overlayEl.querySelector("#appModalMessage").textContent = message;
+    const inputWrap = overlayEl.querySelector(".app-modal-input-wrap");
+    if (inputWrap) inputWrap.hidden = true;
     btnConfirm.textContent = confirmText;
 
     btnCancel.hidden = true;
@@ -213,6 +223,86 @@
     });
   }
 
+  /**
+   * @param {object} [opts]
+   * @param {string} [opts.title]
+   * @param {string} [opts.message]
+   * @param {string} [opts.initialValue]
+   * @param {string} [opts.placeholder]
+   * @param {string} [opts.confirmText]
+   * @param {string} [opts.cancelText]
+   * @returns {Promise<string|null>}
+   */
+  function showPromptModal(opts = {}) {
+    if (pendingResolve) {
+      return Promise.resolve(null);
+    }
+
+    const {
+      title = "Editar",
+      message = "",
+      initialValue = "",
+      placeholder = "",
+      confirmText = "Salvar",
+      cancelText = "Cancelar",
+    } = opts;
+
+    modalKind = "prompt";
+    ensureModal();
+
+    const btnCancel = overlayEl.querySelector(".app-modal-btn-cancel");
+    const btnConfirm = overlayEl.querySelector(".app-modal-btn-confirm");
+    const actions = overlayEl.querySelector(".app-modal-actions");
+    const inputWrap = overlayEl.querySelector(".app-modal-input-wrap");
+    const input = overlayEl.querySelector("#appModalInput");
+
+    overlayEl.querySelector("#appModalTitle").textContent = title;
+    overlayEl.querySelector("#appModalMessage").textContent = message;
+    btnCancel.textContent = cancelText;
+    btnConfirm.textContent = confirmText;
+
+    actions.classList.remove("app-modal-actions--single");
+    btnCancel.hidden = false;
+    btnCancel.style.display = "";
+
+    inputWrap.hidden = false;
+    input.value = String(initialValue || "");
+    input.placeholder = String(placeholder || "");
+
+    confirmAction = () => {
+      const value = String(input.value || "").trim();
+      if (!value) return;
+      finish(value);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key !== "Enter" || e.shiftKey) return;
+      e.preventDefault();
+      confirmAction();
+    };
+    input.addEventListener("keydown", onKeyDown);
+
+    return new Promise((resolve) => {
+      pendingResolve = resolve;
+      focusBeforeOpen = document.activeElement;
+
+      overlayEl.hidden = false;
+      requestAnimationFrame(() => {
+        overlayEl.classList.add("is-open");
+        requestAnimationFrame(() => {
+          input.focus({ preventScroll: true });
+          input.select?.();
+        });
+      });
+
+      document.body.style.overflow = "hidden";
+    }).finally(() => {
+      input.removeEventListener("keydown", onKeyDown);
+      inputWrap.hidden = true;
+    });
+  }
+
   window.showConfirmModal = showConfirmModal;
   window.showAlertModal = showAlertModal;
+  window.showPromptModal = showPromptModal;
 })();
